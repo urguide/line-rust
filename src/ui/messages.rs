@@ -502,7 +502,7 @@ pub(super) fn append_message(state: &AppState, msg: &MessageInfo, live: bool) {
 
     let time_txt = format_msg_time(msg.created_time);
     content.append(&bubble);
-    reactions::append(state, &content, &bubble, msg);
+    reactions::append(state, &content, msg);
 
     if msg.mine {
         let chat = state.current_chat.borrow().clone().unwrap_or_default();
@@ -662,6 +662,7 @@ fn append_message_menu(state: &AppState, footer: &gtk::Box, bubble: &gtk::Box, m
     };
     let popover = gtk::Popover::new();
     let actions = gtk::Box::new(gtk::Orientation::Vertical, 2);
+    reactions::append_choices(state, &actions, &popover, msg);
     let reply = gtk::Button::with_label(&crate::i18n::t("reply_message"));
     reply.add_css_class("flat");
     actions.append(&reply);

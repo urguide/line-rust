@@ -115,9 +115,10 @@ icon or Settings to preview and save a new LINE profile photo or cover image.
 Click a sender's avatar in a conversation to view their photo, cover and status,
 add them as a friend or start a direct chat. Photo and cover updates are sent to
 LINE; cover uploads are associated with the profile only after OBS succeeds.
-Message reactions support all six LINE types and removal. Click a text bubble
-or its smile button to choose a reaction. Both incoming and outgoing messages
-show per-type counts, with your own reaction highlighted. LINE reaction events
+Message reactions support all six LINE types and removal. Right-click a message
+to choose from a horizontal row of six reactions in its actions menu. Both incoming
+and outgoing messages show per-type counts only when reactions exist, with your
+own reaction highlighted. LINE reaction events
 trigger a debounced snapshot refresh; opening history and a 30-second check
 also refresh the latest page and visible historical messages. Snapshots are
 stored per account without changing message retention or downloading media.

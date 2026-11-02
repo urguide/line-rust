@@ -735,7 +735,6 @@ pub fn load_css() {
         .line-reaction-chip { padding: 2px 6px; min-height: 22px; border-radius: 12px; }
         .line-reaction-mine { background: alpha(@accent_bg_color, 0.25); }
         .line-reaction-choice { font-size: 1.5em; padding: 6px; }
-        .line-reaction-menu > button { min-height: 22px; min-width: 22px; padding: 0; }
         .line-avatar-frame {
             border-radius: 999px;
             overflow: hidden;

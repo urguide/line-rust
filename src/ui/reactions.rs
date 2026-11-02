@@ -240,12 +240,7 @@ fn send(state: &AppState, chat: &str, message: &str, reaction: u8) {
     }
 }
 
-pub(super) fn append(
-    state: &AppState,
-    content: &gtk::Box,
-    bubble: &gtk::Box,
-    message: &MessageInfo,
-) {
+pub(super) fn append(state: &AppState, content: &gtk::Box, message: &MessageInfo) {
     if message.id.is_empty() || !message.id.bytes().all(|b| b.is_ascii_digit()) {
         return;
     }
@@ -274,21 +269,26 @@ pub(super) fn append(
         .borrow_mut()
         .slots
         .insert(message.id.clone(), bar.downgrade());
-    let controls = gtk::Box::builder()
-        .spacing(2)
-        .halign(if message.mine {
-            gtk::Align::End
-        } else {
-            gtk::Align::Start
-        })
-        .build();
-    controls.append(&bar);
-    content.append(&controls);
+    content.append(&bar);
     if let Some(m) = state.message_index.borrow_mut().get_mut(&message.id) {
         update_message(m, &row);
     }
 
-    let popover = gtk::Popover::new();
+    schedule(state);
+}
+
+pub(super) fn append_choices(
+    state: &AppState,
+    actions: &gtk::Box,
+    popover: &gtk::Popover,
+    message: &MessageInfo,
+) {
+    if message.id.is_empty() || !message.id.bytes().all(|b| b.is_ascii_digit()) {
+        return;
+    }
+    let Some(chat) = state.current_chat.borrow().clone() else {
+        return;
+    };
     let choices = gtk::Box::new(gtk::Orientation::Horizontal, 2);
     for (i, emoji) in EMOJI.iter().enumerate() {
         let button = gtk::Button::builder()
@@ -319,11 +319,26 @@ pub(super) fn append(
         });
         choices.append(&button);
     }
+    actions.append(&choices);
     let undo = gtk::Button::builder()
-        .icon_name("edit-undo-symbolic")
-        .tooltip_text(crate::i18n::t("reaction_remove"))
+        .label(crate::i18n::t("reaction_remove"))
         .css_classes(["flat"])
         .build();
+    let s = state.clone();
+    let message_id = message.id.clone();
+    let undo_weak = undo.downgrade();
+    popover.connect_show(move |_| {
+        if let Some(undo) = undo_weak.upgrade() {
+            let own = s.self_mid.borrow();
+            let selected = s
+                .message_index
+                .borrow()
+                .get(&message_id)
+                .and_then(|m| m.reactions.as_ref())
+                .is_some_and(|rs| rs.iter().any(|r| Some(r.from.as_str()) == own.as_deref()));
+            undo.set_visible(selected);
+        }
+    });
     let s = state.clone();
     let id = message.id.clone();
     let chat2 = chat.clone();
@@ -334,56 +349,8 @@ pub(super) fn append(
         }
         send(&s, &chat2, &id, 1);
     });
-    choices.append(&undo);
-    popover.set_child(Some(&choices));
-    let menu = gtk::MenuButton::builder()
-        .icon_name("face-smile-symbolic")
-        .tooltip_text(crate::i18n::t("reaction_add"))
-        .css_classes(["flat", "circular", "line-reaction-menu"])
-        .popover(&popover)
-        .halign(gtk::Align::End)
-        .build();
-    // Keep an explicit control for images, links and keyboard navigation.
-    controls.append(&menu);
-    let click = gtk::GestureClick::new();
-    click.set_button(1);
-    click.set_propagation_phase(gtk::PropagationPhase::Capture);
-    let start = Rc::new(RefCell::new((0.0_f64, 0.0_f64)));
-    let start2 = start.clone();
-    click.connect_pressed(move |_, _, x, y| *start2.borrow_mut() = (x, y));
-    let weak_menu = menu.downgrade();
-    let weak_bubble = bubble.downgrade();
-    click.connect_released(move |_, n, x, y| {
-        if n != 1 || (start.borrow().0 - x).abs() > 4.0 || (start.borrow().1 - y).abs() > 4.0 {
-            return;
-        }
-        let Some(bubble) = weak_bubble.upgrade() else {
-            return;
-        };
-        let mut target = bubble.pick(x, y, gtk::PickFlags::DEFAULT);
-        while let Some(widget) = target {
-            if widget == bubble {
-                break;
-            }
-            if widget.is::<gtk::Button>()
-                || widget.is::<gtk::Picture>()
-                || widget.is::<gtk::TextView>()
-            {
-                return;
-            }
-            if let Some(label) = widget.downcast_ref::<gtk::Label>()
-                && label.selection_bounds().is_some()
-            {
-                return;
-            }
-            target = widget.parent();
-        }
-        if let Some(menu) = weak_menu.upgrade() {
-            menu.popup();
-        }
-    });
-    bubble.add_controller(click);
-    schedule(state);
+    actions.append(&undo);
+    actions.append(&gtk::Separator::new(gtk::Orientation::Horizontal));
 }
 
 #[cfg(test)]
