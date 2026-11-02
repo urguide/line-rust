@@ -8,6 +8,7 @@ import { notesRpc } from "./notes.ts";
 import { downloadMedia } from "./media.ts";
 import { normalizeReadRanges } from "./receipts.ts";
 import { profileRpc } from "./profiles.ts";
+import { reactionSnapshots, sendReaction } from "./reactions.ts";
 
 type Json = Record<string, unknown>;
 export function createApi(
@@ -65,7 +66,12 @@ export function createApi(
         return await notesRpc(c, String(p.action), p, transfer);
       case "bridge_profile":
         return await profileRpc(c, p, transfer);
+      case "bridge_react":
+        return await sendReaction(c, p);
+      case "bridge_reactions":
+        return await reactionSnapshots(c, p);
       case "bridge_fetch_page": {
+        const reactionsAt = Date.now();
         const signal = fetches.get(String(p.fetchToken))?.signal;
         signal?.throwIfAborted();
         let end = p.before as
@@ -108,10 +114,13 @@ export function createApi(
           try {
             const tm = await decode(message, c);
             messages.push(
-              takeDecodeEnvelope(tm.raw) ?? {
-                decodedMessage: packRaw(tm.raw),
-                rawMessage,
-                decodeError: null,
+              {
+                ...(takeDecodeEnvelope(tm.raw) ?? {
+                  decodedMessage: packRaw(tm.raw),
+                  rawMessage,
+                  decodeError: null,
+                }),
+                reactionsUpdatedAt: reactionsAt,
               },
             );
           } catch {
@@ -121,6 +130,7 @@ export function createApi(
               decodedMessage: null,
               rawMessage,
               decodeError: "message_decode_failed",
+              reactionsUpdatedAt: reactionsAt,
             });
           }
         }
@@ -448,6 +458,7 @@ export function createApi(
     // Keep mutations exclusive: their sequence numbers and uploads are ordered.
     const mutation = [
       "bridge_send_text",
+      "bridge_react",
       "bridge_send_sticker",
       "bridge_unsend",
       "bridge_friend_request",

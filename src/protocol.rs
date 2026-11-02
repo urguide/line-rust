@@ -80,6 +80,12 @@ pub struct FlexInfo {
 #[derive(Debug, Clone, Deserialize)]
 pub struct MessageInfo {
     #[serde(default)]
+    pub reactions: Option<Vec<ReactionInfo>>,
+    #[serde(rename = "reactionsUpdatedAt", default)]
+    pub reactions_updated_at: i64,
+    #[serde(rename = "deliveredTime", default)]
+    pub delivered_time: String,
+    #[serde(default)]
     pub id: String,
     #[serde(default)]
     pub text: String,
@@ -115,8 +121,23 @@ pub struct MessageInfo {
     pub mentioned_mids: Vec<String>,
 }
 
+#[derive(Debug, Clone, serde::Serialize, Deserialize)]
+pub struct ReactionInfo {
+    #[serde(rename = "fromUserMid")]
+    pub from: String,
+    pub reaction: u8,
+    #[serde(rename = "atMillis", default)]
+    pub at: i64,
+}
+
 #[derive(Debug, Clone)]
 pub enum ProtocolEvent {
+    ReactionsChanged,
+    Reactions {
+        account: String,
+        chat_mid: String,
+        messages: Value,
+    },
     Ready {
         has_auth: bool,
     },

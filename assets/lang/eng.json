@@ -1,4 +1,13 @@
 {
+  "reaction_add": "React to message",
+  "reaction_remove": "Remove my reaction",
+  "reaction_nice": "Like",
+  "reaction_love": "Love",
+  "reaction_fun": "Laugh",
+  "reaction_amazing": "Surprised",
+  "reaction_sad": "Sad",
+  "reaction_omg": "OMG",
+  "reaction_failed": "Could not update reaction: {error}",
   "my_profile": "My profile",
   "view_profile": "View profile",
   "profile_settings_hint": "Manage your LINE photo and cover image",

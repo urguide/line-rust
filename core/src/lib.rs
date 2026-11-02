@@ -10,6 +10,7 @@ pub mod mentions;
 pub mod message;
 pub mod notes;
 pub mod postback;
+pub mod reactions;
 pub mod receipts;
 pub mod session;
 pub mod sticker_cache;

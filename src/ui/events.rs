@@ -18,6 +18,12 @@ pub(super) fn pump_events(state: AppState) {
 
 pub(super) fn handle_event(state: &AppState, ev: ProtocolEvent) {
     match ev {
+        ProtocolEvent::ReactionsChanged => reactions::changed(state),
+        ProtocolEvent::Reactions {
+            account,
+            chat_mid,
+            messages,
+        } => reactions::apply(state, &account, &chat_mid, &messages),
         ProtocolEvent::ExpressionState(value) => super::expressions::queue_state(state, &value),
         ProtocolEvent::Ready { has_auth } => {
             let restarting = *state.restarting.borrow();
@@ -57,6 +63,7 @@ pub(super) fn handle_event(state: &AppState, ev: ProtocolEvent) {
             mentions::reset(state);
             notes::close(state);
             profiles::close(state);
+            *state.reaction_ui.borrow_mut() = Default::default();
             super::expressions::close(state);
             *state.session_ready.borrow_mut() = false;
             hide_upload_progress(state);
@@ -548,6 +555,22 @@ pub(super) fn handle_event(state: &AppState, ev: ProtocolEvent) {
             error,
         } => {
             let pending = state.pending.borrow_mut().remove(&id);
+            if let Some(Pending::Reactions {
+                chat,
+                account,
+                message,
+            }) = pending.as_ref()
+            {
+                reactions::response(
+                    state,
+                    chat,
+                    account.as_deref(),
+                    message.as_deref(),
+                    ok,
+                    error.as_deref(),
+                );
+                return;
+            }
             if let Some(Pending::Profile { ui, action }) = pending.as_ref() {
                 if let Some(ui) = ui.upgrade() {
                     profiles::response(state, &ui, action, ok, &result, error.as_deref());
@@ -701,6 +724,7 @@ pub(super) fn handle_event(state: &AppState, ev: ProtocolEvent) {
                 }
                 Some(Pending::Notes { .. }) => unreachable!("notes responses handled above"),
                 Some(Pending::Profile { .. }) => unreachable!("profile responses handled above"),
+                Some(Pending::Reactions { .. }) => unreachable!("reaction responses handled above"),
                 Some(Pending::AddFriend) => {
                     toast(state, &crate::i18n::t("friend_ok"));
                     request_friends_list(state);
@@ -862,6 +886,7 @@ pub(super) fn handle_event(state: &AppState, ev: ProtocolEvent) {
 const MAX_SIDECAR_RECOVERY_ATTEMPTS: u8 = 3;
 
 pub(super) fn schedule_sidecar_recovery(state: &AppState) {
+    *state.reaction_ui.borrow_mut() = Default::default();
     *state.message_cache.borrow_mut() = Default::default();
     notes::close(state);
     profiles::close(state);
@@ -1015,6 +1040,7 @@ pub(super) fn show_shell_restoring(state: &AppState) {
 }
 
 pub(super) fn show_login(state: &AppState, hint: &str) {
+    *state.reaction_ui.borrow_mut() = Default::default();
     mentions::reset(state);
     notes::close(state);
     profiles::close(state);

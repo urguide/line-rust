@@ -811,6 +811,11 @@ impl Ipc {
             let chat_mid = event["chatMid"].as_str().unwrap_or_default().to_owned();
             let message_id = event["messageId"].as_str().unwrap_or_default().to_owned();
             match event["event"].as_str() {
+                Some("reactions") => Some(ProtocolEvent::Reactions {
+                    account: event["account"].as_str().unwrap_or_default().into(),
+                    chat_mid,
+                    messages: event["messages"].clone(),
+                }),
                 Some("read_counts") => Some(ProtocolEvent::ReadCounts {
                     account: event["account"].as_str().unwrap_or_default().into(),
                     chat_mid,

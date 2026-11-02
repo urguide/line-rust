@@ -1238,6 +1238,9 @@ pub(super) fn send_local_image_file(state: &AppState, path: &std::path::Path) ->
                 id,
                 &chat_mid,
                 MessageInfo {
+                    reactions: None,
+                    reactions_updated_at: 0,
+                    delivered_time: String::new(),
                     mentioned_mids: Vec::new(),
                     id: String::new(),
                     text: "[Image]".into(),

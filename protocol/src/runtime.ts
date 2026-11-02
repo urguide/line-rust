@@ -3,6 +3,7 @@ import { Client, loginWithAuthToken, loginWithQR } from "@evex/linejs";
 import { FileStorage } from "@evex/linejs/storage";
 import { AuthStore, type LineDevice } from "./auth.ts";
 import { createApi } from "./api.ts";
+import { isReactionOperation } from "./reactions.ts";
 import { attachLive, errorReport } from "./live.ts";
 import { packRaw } from "./raw_codec.ts";
 import * as calls from "./calls.ts";
@@ -73,7 +74,11 @@ async function connected(next: Client, loginDevice: LineDevice) {
     try {
       const unsent = unsendFromOperation(op);
       const read = readFromOperation(op);
-      if (unsent) event("message_unsent", unsent);
+      if (isReactionOperation(op)) {
+        event("reactions_changed", {
+          params: [op.param1, op.param2, op.param3],
+        });
+      } else if (unsent) event("message_unsent", unsent);
       else if (read) {
         event("peer_read", read);
       } else if (/CONTACT|FRIEND|PROFILE/.test(String(op.type))) {

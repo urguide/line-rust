@@ -65,6 +65,16 @@ pub fn merge(old: Value, incoming: &Value) -> Value {
     let mut merged = old.as_object().cloned().unwrap_or_default();
     if let Some(fields) = incoming.as_object() {
         for (key, value) in fields {
+            if matches!(key.as_str(), "reactions" | "reactionsUpdatedAt")
+                && (!incoming["reactions"].is_array()
+                    || incoming["reactionsUpdatedAt"].as_i64().unwrap_or(0)
+                        < merged
+                            .get("reactionsUpdatedAt")
+                            .and_then(Value::as_i64)
+                            .unwrap_or(0))
+            {
+                continue;
+            }
             if value.is_null()
                 && matches!(
                     key.as_str(),
@@ -456,6 +466,30 @@ impl Store {
         }
         tx.commit()?;
         Ok(())
+    }
+
+    /// Reaction-only writes preserve message/page age and never create phantom rows.
+    pub fn update_reactions(&self, chat: &str, snapshots: &Value, at: i64) -> Result<Vec<Value>> {
+        let mut updated = Vec::new();
+        for snapshot in snapshots.as_array().into_iter().flatten() {
+            let mid = id(snapshot);
+            let Some(mut row) = self.message(chat, mid)? else {
+                continue;
+            };
+            if !snapshot["reactions"].is_array()
+                || at < row["reactionsUpdatedAt"].as_i64().unwrap_or(0)
+            {
+                continue;
+            }
+            row["reactions"] = crate::reactions::normalize(&snapshot["reactions"]);
+            row["reactionsUpdatedAt"] = json!(at);
+            self.db.execute(
+                "UPDATE messages SET body=?1 WHERE account=?2 AND chat=?3 AND id=?4",
+                params![row.to_string(), self.account, chat, mid],
+            )?;
+            updated.push(json!({"id":mid,"reactions":row["reactions"],"reactionsUpdatedAt":at}));
+        }
+        Ok(updated)
     }
 
     pub fn page(&self, chat: &str, before: Option<&Cursor>, fresh_ms: i64) -> Result<Option<Page>> {

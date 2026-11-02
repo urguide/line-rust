@@ -16,6 +16,7 @@ mod messages;
 mod notes;
 mod notifications;
 mod profiles;
+mod reactions;
 mod replies;
 mod senders;
 mod settings;
@@ -179,6 +180,7 @@ fn build_ui(app: &Application, repo_root: PathBuf, data_dir: PathBuf) -> Result<
         chats: Rc::new(RefCell::new(Vec::new())),
         chat_avatars: Rc::new(RefCell::new(HashMap::new())),
         sender_ui: Rc::new(RefCell::new(senders::SenderUi::default())),
+        reaction_ui: Rc::new(RefCell::new(reactions::ReactionUi::default())),
         chat_previews: Rc::new(RefCell::new(HashMap::new())),
         chat_unread_badges: Rc::new(RefCell::new(HashMap::new())),
         media_slots: Rc::new(RefCell::new(HashMap::new())),
@@ -300,6 +302,7 @@ fn build_ui(app: &Application, repo_root: PathBuf, data_dir: PathBuf) -> Result<
                 && let Some(chat) = state.current_chat.borrow().as_deref()
             {
                 let _ = state.sidecar.sync_receipts(chat);
+                reactions::sync(&state);
             }
             glib::ControlFlow::Continue
         });
@@ -1044,6 +1047,9 @@ fn send_current(state: &AppState) {
                 id,
                 &chat_mid,
                 MessageInfo {
+                    reactions: None,
+                    reactions_updated_at: 0,
+                    delivered_time: String::new(),
                     mentioned_mids: Vec::new(),
                     id: String::new(),
                     text: display_text,
@@ -1701,6 +1707,7 @@ fn open_chat(state: &AppState, chat: &ChatInfo) {
     let already_open = state.current_chat.borrow().as_deref() == Some(chat.mid.as_str());
     let _ = state.sidecar.focus_chat(&chat.mid);
     if already_open {
+        reactions::sync(state);
         let _ = state.sidecar.sync_receipts(&chat.mid);
         // Tap again while already open: mark read without reloading the thread.
         mark_chat_read(state, &chat.mid);

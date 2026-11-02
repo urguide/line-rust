@@ -315,6 +315,8 @@ impl Sidecar {
                 | "profile_avatar"
                 | "sender_profile"
                 | "profile"
+                | "react"
+                | "sync_reactions"
                 | "reply_original"
                 | "list_stickers"
                 | "expression_library"
@@ -830,6 +832,7 @@ fn read_loop_inner<R: std::io::Read>(
                                 .unwrap_or_default();
                             ProtocolEvent::Messages { chat_mid, messages }
                         }
+                        "reactions_changed" => ProtocolEvent::ReactionsChanged,
                         "avatar_ready" => ProtocolEvent::AvatarReady {
                             mid: resp
                                 .extra

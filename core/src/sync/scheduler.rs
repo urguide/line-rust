@@ -9,6 +9,12 @@ pub(super) struct PageJob {
 }
 
 enum Completion {
+    Reactions {
+        id: u64,
+        chat: String,
+        generation: u64,
+        result: Result<Value>,
+    },
     Operation {
         id: u64,
         generation: u64,
@@ -179,6 +185,20 @@ impl Scheduler {
 }
 
 impl<T: Transport> Engine<T> {
+    pub(super) fn start_reactions(&mut self, id: u64, params: Value, generation: u64) {
+        let transport = self.transport.clone();
+        let tx = self.scheduler.tx.clone();
+        thread::spawn(move || {
+            let chat = params["chatMid"].as_str().unwrap_or_default().to_owned();
+            let result = transport.call("bridge_reactions", params, generation);
+            let _ = tx.send(Completion::Reactions {
+                id,
+                chat,
+                generation,
+                result,
+            });
+        });
+    }
     fn finish_page_response(&mut self, job: &PageJob, result: Result<Value>) {
         for id in self.scheduler.complete_page(job) {
             self.response(
@@ -247,6 +267,22 @@ impl<T: Transport> Engine<T> {
     pub(super) fn finish_async(&mut self) {
         while let Ok(done) = self.scheduler.rx.try_recv() {
             match done {
+                Completion::Reactions {
+                    id,
+                    chat,
+                    generation,
+                    result,
+                } => {
+                    if self.valid(generation).is_err() {
+                        continue;
+                    }
+                    let result = result.and_then(|raw| {
+                        let rows = self.store.update_reactions(&chat, &raw["messages"], raw["at"].as_i64().context("missing reaction snapshot time")?)?;
+                        self.transport.emit(json!({"event":"reactions","account":self.account,"chatMid":chat,"messages":rows}));
+                        Ok(json!({"synced":true}))
+                    });
+                    self.response(id, result, generation);
+                }
                 Completion::Operation {
                     id,
                     generation,

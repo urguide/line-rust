@@ -62,6 +62,12 @@ impl MessageCache {
         if let Some(old) = self.pages.get(mid) {
             for message in &old.messages {
                 if let Some(incoming) = page.messages.iter_mut().find(|m| m.id == message.id) {
+                    if incoming.reactions.is_none()
+                        || incoming.reactions_updated_at < message.reactions_updated_at
+                    {
+                        incoming.reactions = message.reactions.clone();
+                        incoming.reactions_updated_at = message.reactions_updated_at;
+                    }
                     for (slot, saved) in [
                         (&mut incoming.image_path, &message.image_path),
                         (&mut incoming.audio_path, &message.audio_path),
@@ -105,6 +111,16 @@ impl MessageCache {
     pub fn unsend(&mut self, mid: &str, id: &str) {
         if let Some(page) = self.pages.get_mut(mid) {
             page.messages.retain(|m| m.id != id);
+        }
+    }
+
+    pub fn reactions(&mut self, chat: &str, snapshots: &serde_json::Value) {
+        if let Some(page) = self.pages.get_mut(chat) {
+            for row in snapshots.as_array().into_iter().flatten() {
+                if let Some(message) = page.messages.iter_mut().find(|m| row["id"] == m.id) {
+                    super::reactions::update_message(message, row);
+                }
+            }
         }
     }
 

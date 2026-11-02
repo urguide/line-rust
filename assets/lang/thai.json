@@ -1,4 +1,13 @@
 {
+  "reaction_add": "ส่งความรู้สึกต่อข้อความ",
+  "reaction_remove": "ยกเลิกความรู้สึกของฉัน",
+  "reaction_nice": "ถูกใจ",
+  "reaction_love": "รัก",
+  "reaction_fun": "หัวเราะ",
+  "reaction_amazing": "ประหลาดใจ",
+  "reaction_sad": "เศร้า",
+  "reaction_omg": "ตกใจ",
+  "reaction_failed": "อัปเดตความรู้สึกไม่สำเร็จ: {error}",
   "my_profile": "โปรไฟล์ของฉัน",
   "view_profile": "ดูโปรไฟล์",
   "profile_settings_hint": "จัดการรูปโปรไฟล์และภาพหน้าปก LINE",

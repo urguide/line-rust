@@ -502,6 +502,7 @@ pub(super) fn append_message(state: &AppState, msg: &MessageInfo, live: bool) {
 
     let time_txt = format_msg_time(msg.created_time);
     content.append(&bubble);
+    reactions::append(state, &content, &bubble, msg);
 
     if msg.mine {
         let chat = state.current_chat.borrow().clone().unwrap_or_default();
@@ -1394,6 +1395,9 @@ pub(super) fn attach_audio_to_slot(state: &AppState, message_id: &str, path: &st
     }
     let duration_ms = ffprobe_duration_ms(std::path::Path::new(path)).map(|v| v as i64);
     let msg = MessageInfo {
+        reactions: None,
+        reactions_updated_at: 0,
+        delivered_time: String::new(),
         mentioned_mids: Vec::new(),
         id: message_id.to_string(),
         text: "Voice message".into(),
@@ -1662,6 +1666,7 @@ pub(super) fn clear_messages(state: &AppState) {
     state.media_slots.borrow_mut().clear();
     state.media_msgs.borrow_mut().clear();
     state.receipt_slots.borrow_mut().clear();
+    state.reaction_ui.borrow_mut().slots.clear();
     state.msg_created.borrow_mut().clear();
     state.pending_rows.borrow_mut().clear();
     state.seen_msg_ids.borrow_mut().clear();

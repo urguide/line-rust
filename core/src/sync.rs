@@ -474,6 +474,11 @@ impl<T: Transport> Engine<T> {
                     return Ok(true);
                 }
                 let upload = matches!(method.as_str(), "send_media" | "send_audio");
+                if method == "sync_reactions" && self.scheduler.enabled {
+                    self.valid(generation)?;
+                    self.start_reactions(id, params, generation);
+                    return Ok(true);
+                }
                 let upload_chat = params["chatMid"].as_str().unwrap_or_default().to_owned();
                 if upload && self.generation.load(Ordering::SeqCst) == generation {
                     self.transport.emit(crate::attachments::upload_progress(
@@ -485,6 +490,60 @@ impl<T: Transport> Engine<T> {
                 }
                 let result = (|| {
                     self.valid(generation)?;
+                    if matches!(method.as_str(), "sync_reactions" | "react") {
+                        let chat = params["chatMid"]
+                            .as_str()
+                            .context("missing reaction chat")?;
+                        if method == "react" {
+                            let message = params["messageId"]
+                                .as_str()
+                                .context("missing reaction message")?;
+                            let row = self
+                                .store
+                                .message(chat, message)?
+                                .context("reaction message unavailable")?;
+                            let reaction = crate::reactions::kind(&params["reaction"])
+                                .context("invalid reaction")?;
+                            let sent =
+                                self.transport
+                                    .call("bridge_react", params.clone(), generation)?;
+                            if sent["sent"] != true {
+                                bail!("reaction not acknowledged");
+                            }
+                            self.valid(generation)?;
+                            let now = std::time::SystemTime::now()
+                                .duration_since(std::time::UNIX_EPOCH)?
+                                .as_millis() as i64;
+                            let mut reactions = crate::reactions::normalize(&row["reactions"])
+                                .as_array()
+                                .cloned()
+                                .unwrap_or_default();
+                            reactions.retain(|r| r["fromUserMid"] != self.account);
+                            if reaction != 1 {
+                                reactions.push(json!({"fromUserMid":self.account,"reaction":reaction,"atMillis":now}));
+                            }
+                            let rows = self.store.update_reactions(
+                                chat,
+                                &json!([{"id":message,"reactions":reactions}]),
+                                now,
+                            )?;
+                            self.transport.emit(json!({"event":"reactions","account":self.account,"chatMid":chat,"messages":rows}));
+                            return Ok(json!({"sent":true}));
+                        }
+                        let raw =
+                            self.transport
+                                .call("bridge_reactions", params.clone(), generation)?;
+                        self.valid(generation)?;
+                        let rows = self.store.update_reactions(
+                            chat,
+                            &raw["messages"],
+                            raw["at"]
+                                .as_i64()
+                                .context("missing reaction snapshot time")?,
+                        )?;
+                        self.transport.emit(json!({"event":"reactions","account":self.account,"chatMid":chat,"messages":rows}));
+                        return Ok(json!({"synced":true}));
+                    }
                     if method == "reply_original" {
                         let chat = params["chatMid"].as_str().context("missing chat ID")?;
                         let id = params["messageId"].as_str().context("missing message ID")?;
