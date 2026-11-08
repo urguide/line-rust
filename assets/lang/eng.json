@@ -1,4 +1,6 @@
 {
+  "copy_message_all": "Copy all",
+  "copy_message_urls": "Copy URLs",
   "reaction_add": "React to message",
   "reaction_remove": "Remove my reaction",
   "reaction_nice": "Like",

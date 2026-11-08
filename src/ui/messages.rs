@@ -663,6 +663,25 @@ fn append_message_menu(state: &AppState, footer: &gtk::Box, bubble: &gtk::Box, m
     let popover = gtk::Popover::new();
     let actions = gtk::Box::new(gtk::Orientation::Vertical, 2);
     reactions::append_choices(state, &actions, &popover, msg);
+    for (key, text) in [
+        ("copy_message_all", msg.text.clone()),
+        ("copy_message_urls", https_urls_for_clipboard(&msg.text)),
+    ] {
+        let button = gtk::Button::builder()
+            .label(crate::i18n::t(key))
+            .sensitive(!text.is_empty())
+            .css_classes(["flat"])
+            .build();
+        let clipboard = state.window.clipboard();
+        let popup = popover.downgrade();
+        button.connect_clicked(move |_| {
+            clipboard.set_text(&text);
+            if let Some(popup) = popup.upgrade() {
+                popup.popdown();
+            }
+        });
+        actions.append(&button);
+    }
     let reply = gtk::Button::with_label(&crate::i18n::t("reply_message"));
     reply.add_css_class("flat");
     actions.append(&reply);
@@ -747,6 +766,53 @@ fn append_message_menu(state: &AppState, footer: &gtk::Box, bubble: &gtk::Box, m
         }
     });
     bubble.add_controller(click);
+}
+
+/// Extract every HTTPS link in textual order, including links after a label
+/// without whitespace. Keep query strings, fragments and balanced URL brackets.
+fn https_urls_for_clipboard(text: &str) -> String {
+    let mut urls = Vec::new();
+    let mut rest = text;
+    while let Some(start) = rest.find("https://") {
+        rest = &rest[start..];
+        let end = rest
+            .find(|c: char| {
+                c.is_whitespace()
+                    || matches!(
+                        c,
+                        '<' | '>' | '"' | '\'' | '`' | '，' | '。' | '；' | '！' | '？'
+                            | '「' | '」' | '『' | '』' | '（' | '）' | '【' | '】' | '、'
+                    )
+            })
+            .unwrap_or(rest.len());
+        let mut url = &rest[..end];
+        loop {
+            let trimmed = url.trim_end_matches(['.', ',', ';', '!', '?', ':']);
+            if trimmed.len() != url.len() {
+                url = trimmed;
+                continue;
+            }
+            let Some(last) = url.chars().last() else { break };
+            let opening = match last {
+                ')' => '(',
+                ']' => '[',
+                '}' => '{',
+                _ => break,
+            };
+            if url.chars().filter(|c| *c == last).count()
+                > url.chars().filter(|c| *c == opening).count()
+            {
+                url = &url[..url.len() - last.len_utf8()];
+            } else {
+                break;
+            }
+        }
+        if reqwest::Url::parse(url).is_ok_and(|u| u.scheme() == "https" && u.host_str().is_some()) {
+            urls.push(url.to_owned());
+        }
+        rest = &rest[end..];
+    }
+    urls.join("\n")
 }
 
 pub(super) fn apply_message_unsent(state: &AppState, chat_mid: &str, message_id: &str) {
@@ -2002,6 +2068,15 @@ mod receipt_tests {
         }
     }
 
+    #[test]
+    fn copy_https_urls_preserves_order_queries_duplicates_and_balanced_brackets() {
+        let text = "網址：https://example.com/a?q=1&b=2#section，另見（https://example.org/wiki/Test_(one)）。\n<https://example.net/三> https://[::1]/path https://example.com/a?q=1&b=2#section";
+        assert_eq!(super::https_urls_for_clipboard(text), "https://example.com/a?q=1&b=2#section\nhttps://example.org/wiki/Test_(one)\nhttps://example.net/三\nhttps://[::1]/path\nhttps://example.com/a?q=1&b=2#section");
+        assert_eq!(super::https_urls_for_clipboard("[link](https://example.com/a). \"https://example.org/b\"; http://example.net https://"), "https://example.com/a\nhttps://example.org/b");
+        assert_eq!(super::https_urls_for_clipboard("沒有網址 http://example.com"), "");
+        let many = (0..8).map(|n| format!("https://example.com/{n}")).collect::<Vec<_>>();
+        assert_eq!(super::https_urls_for_clipboard(&many.join(" ")), many.join("\n"));
+    }
     #[test]
     fn message_grouping_uses_adjacent_messages_with_an_inclusive_five_minute_limit() {
         use super::message_boundary;

@@ -1,4 +1,6 @@
 {
+  "copy_message_all": "คัดลอกทั้งหมด",
+  "copy_message_urls": "คัดลอกลิงก์",
   "reaction_add": "ส่งความรู้สึกต่อข้อความ",
   "reaction_remove": "ยกเลิกความรู้สึกของฉัน",
   "reaction_nice": "ถูกใจ",
