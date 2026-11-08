@@ -44,6 +44,8 @@ pub struct AppConfig {
     pub call_spk_volume: f64,
     /// Chat list sidebar width in px (remembered across launches).
     pub sidebar_width: i32,
+    /// Place unread counts below the timestamp; compact sidebars use the avatar.
+    pub unread_below_time: bool,
     /// Unlock experimental voice calls (unstable; off by default).
     pub experimental_calls: bool,
     /// Keep a StatusNotifierItem tray icon while running.
@@ -94,6 +96,7 @@ impl Default for AppConfig {
             call_mic_volume: 1.0,
             call_spk_volume: 1.0,
             sidebar_width: 320,
+            unread_below_time: true,
             experimental_calls: false,
             tray_enabled: true,
             close_to_tray: true,

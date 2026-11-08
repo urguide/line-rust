@@ -845,6 +845,7 @@ fn set_chat_rows_compact(state: &AppState, compact: bool) {
         let next = w.next_sibling();
         if let Ok(row) = w.downcast::<gtk::ListBoxRow>() {
             apply_chat_row_compact(&row, compact);
+            chats::position_unread_badge(&row, compact, state.config.borrow().unread_below_time);
         }
         child = next;
     }
@@ -1494,6 +1495,10 @@ fn wire_actions(state: &AppState) {
             }
         }
         let deps = settings::SettingsDeps {
+            on_unread_position: {
+                let s2 = s.clone();
+                Rc::new(move || set_chat_rows_compact(&s2, *s2.sidebar_compact.borrow()))
+            },
             on_profile: {
                 let s2 = s.clone();
                 Rc::new(move || profiles::open_self(&s2))

@@ -1,4 +1,8 @@
 {
+  "unread_position": "ตำแหน่งจำนวนข้อความที่ยังไม่อ่าน",
+  "unread_position_hint": "แถบด้านข้างแบบย่อจะแสดงบนรูปโปรไฟล์เสมอ",
+  "unread_below_time": "ใต้เวลา",
+  "unread_on_avatar": "บนรูปโปรไฟล์",
   "jump_latest": "ไปยังข้อความล่าสุด (End)",
   "reply_original_unavailable": "ไม่พบข้อความต้นฉบับ",
   "copy_message_all": "คัดลอกทั้งหมด",

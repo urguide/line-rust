@@ -1,4 +1,8 @@
 {
+  "unread_position": "Unread badge position",
+  "unread_position_hint": "Compact sidebars always show the badge on the avatar.",
+  "unread_below_time": "Below the timestamp",
+  "unread_on_avatar": "On the avatar",
   "jump_latest": "Jump to latest message (End)",
   "reply_original_unavailable": "Could not locate the original message.",
   "copy_message_all": "Copy all",

@@ -354,6 +354,11 @@ pub(super) fn apply_chats(state: &AppState, mut chats: Vec<ChatInfo>, cached: bo
 
     for chat in &chats {
         let (row, avatar, preview, badge) = build_chat_row(chat, *state.sidebar_compact.borrow());
+        position_unread_badge(
+            &row,
+            *state.sidebar_compact.borrow(),
+            state.config.borrow().unread_below_time,
+        );
         state
             .chat_avatars
             .borrow_mut()
@@ -480,6 +485,11 @@ pub(super) fn upsert_chat_row(state: &AppState, chat: ChatInfo) {
 
     let pinned = pinned_chats(state);
     let (row, avatar, preview, badge) = build_chat_row(&chat, *state.sidebar_compact.borrow());
+    position_unread_badge(
+        &row,
+        *state.sidebar_compact.borrow(),
+        state.config.borrow().unread_below_time,
+    );
     state.chat_avatars.borrow_mut().insert(mid.clone(), avatar);
     state
         .chat_previews
@@ -691,6 +701,7 @@ pub(super) fn build_chat_row(
     let bottom = gtk::Box::builder()
         .orientation(gtk::Orientation::Horizontal)
         .spacing(8)
+        .css_classes(["line-chat-bottom"])
         .build();
     let preview_text = if chat.preview.trim().is_empty() {
         if chat.last_activity > 0 {
@@ -717,6 +728,56 @@ pub(super) fn build_chat_row(
     box_.append(&text_col);
     row.set_child(Some(&box_));
     (row, avatar, preview, badge)
+}
+
+pub(super) fn position_unread_badge(row: &gtk::ListBoxRow, compact: bool, below_time: bool) {
+    fn find(widget: &gtk::Widget, class: &str) -> Option<gtk::Widget> {
+        if widget.has_css_class(class) {
+            return Some(widget.clone());
+        }
+        let mut child = widget.first_child();
+        while let Some(widget) = child {
+            if let Some(found) = find(&widget, class) {
+                return Some(found);
+            }
+            child = widget.next_sibling();
+        }
+        None
+    }
+    let widget = row.upcast_ref::<gtk::Widget>();
+    let Some(badge) = find(widget, "line-unread") else {
+        return;
+    };
+    let Some(overlay) = find(widget, "line-avatar-overlay").and_downcast::<gtk::Overlay>() else {
+        return;
+    };
+    let Some(bottom) = find(widget, "line-chat-bottom").and_downcast::<gtk::Box>() else {
+        return;
+    };
+    let under_time = below_time && !compact;
+    let parent = badge.parent();
+    let target: &gtk::Widget = if under_time {
+        bottom.upcast_ref()
+    } else {
+        overlay.upcast_ref()
+    };
+    if parent.as_ref() == Some(target) {
+        return;
+    }
+    if parent.as_ref() == Some(overlay.upcast_ref()) {
+        overlay.remove_overlay(&badge);
+    } else if parent.as_ref() == Some(bottom.upcast_ref()) {
+        bottom.remove(&badge);
+    }
+    if under_time {
+        badge.remove_css_class("line-unread-overlay");
+        badge.set_valign(gtk::Align::Center);
+        bottom.append(&badge);
+    } else {
+        badge.add_css_class("line-unread-overlay");
+        badge.set_valign(gtk::Align::End);
+        overlay.add_overlay(&badge);
+    }
 }
 
 pub(super) fn format_activity(ts: i64) -> String {

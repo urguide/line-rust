@@ -10,6 +10,7 @@ use std::rc::Rc;
 
 pub struct SettingsDeps {
     pub on_profile: Rc<dyn Fn()>,
+    pub on_unread_position: Rc<dyn Fn()>,
     pub sidecar: Rc<Sidecar>,
     pub data_dir: PathBuf,
     pub config: Rc<RefCell<AppConfig>>,
@@ -91,6 +92,30 @@ pub fn open_settings(parent: &impl IsA<gtk::Window>, deps: SettingsDeps) {
         });
     }
     look.add(&theme_row);
+    let unread_position = libadwaita::ComboRow::builder()
+        .title(i18n::t("unread_position"))
+        .subtitle(i18n::t("unread_position_hint"))
+        .build();
+    unread_position.set_model(Some(&gtk::StringList::new(&[
+        &i18n::t("unread_below_time"),
+        &i18n::t("unread_on_avatar"),
+    ])));
+    unread_position.set_selected(if deps.config.borrow().unread_below_time {
+        0
+    } else {
+        1
+    });
+    {
+        let config = deps.config.clone();
+        let data_dir = deps.data_dir.clone();
+        let changed = deps.on_unread_position.clone();
+        unread_position.connect_selected_notify(move |row| {
+            config.borrow_mut().unread_below_time = row.selected() == 0;
+            config.borrow().save(&data_dir);
+            changed();
+        });
+    }
+    look.add(&unread_position);
 
     let lang_row = libadwaita::ComboRow::builder()
         .title(i18n::t("language"))

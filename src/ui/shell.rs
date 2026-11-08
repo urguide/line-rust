@@ -987,8 +987,8 @@ pub fn load_css() {
         .line-flex-action { margin-top: 4px; }
         .line-link-chip { margin-top: 4px; }
         .line-unread {
-            background: @accent_bg_color;
-            color: @accent_fg_color;
+            background: #06c755;
+            color: #ffffff;
             border-radius: 999px;
             min-width: 18px;
             padding: 1px 6px;
