@@ -1331,6 +1331,23 @@ fn wire_actions(state: &AppState) {
         clear_reply(&s);
         s.composer.grab_focus();
     });
+    let click = gtk::GestureClick::new();
+    click.set_button(1);
+    let s = state.clone();
+    click.connect_released(move |_, count, _, _| {
+        if count == 1 {
+            let id = s
+                .reply_target
+                .borrow()
+                .as_ref()
+                .map(|t| t.message.id.clone());
+            if let Some(id) = id {
+                replies::jump_to_original(&s, &id);
+            }
+        }
+    });
+    state.reply_label.set_cursor_from_name(Some("pointer"));
+    state.reply_label.add_controller(click);
     let s = state.clone();
     let keys = gtk::EventControllerKey::new();
     keys.set_propagation_phase(gtk::PropagationPhase::Capture);

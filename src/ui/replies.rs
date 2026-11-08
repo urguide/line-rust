@@ -5,16 +5,17 @@ pub(super) struct ReplyUi {
     originals: HashMap<String, MessageInfo>,
     requested: HashSet<String>,
     slots: HashMap<String, Vec<glib::WeakRef<gtk::Box>>>,
+    jump: std::rc::Rc<std::cell::Cell<u64>>,
 }
 
 const UNAVAILABLE: &str = "無法讀取";
 
 pub(super) fn append(state: &AppState, content: &gtk::Box, id: &str) {
     let quote = gtk::Box::builder()
-        .orientation(gtk::Orientation::Vertical)
-        .spacing(4)
+        .orientation(gtk::Orientation::Horizontal)
+        .spacing(8)
         .halign(gtk::Align::Start)
-        .css_classes(["line-reply-preview", "caption"])
+        .css_classes(["caption"])
         .build();
     content.append(&quote);
     state
@@ -28,6 +29,20 @@ pub(super) fn append(state: &AppState, content: &gtk::Box, id: &str) {
     let s = state.clone();
     let original_id = id.to_owned();
     quote.connect_map(move |quote| render(&s, quote, &original_id));
+    let click = gtk::GestureClick::new();
+    click.set_button(1);
+    click.set_propagation_phase(gtk::PropagationPhase::Capture);
+    let s = state.clone();
+    let original_id = id.to_owned();
+    let chat = state.current_chat.borrow().clone();
+    click.connect_released(move |gesture, count, _, _| {
+        if count == 1 && *s.current_chat.borrow() == chat {
+            gesture.set_state(gtk::EventSequenceState::Claimed);
+            jump_to_original(&s, &original_id);
+        }
+    });
+    quote.set_cursor_from_name(Some("pointer"));
+    quote.add_controller(click);
 
     if original(state, id).is_none()
         && !state.unsent_msg_ids.borrow().contains(id)
@@ -117,12 +132,21 @@ fn render(state: &AppState, quote: &gtk::Box, id: &str) {
         unavailable(quote);
         return;
     };
-    let heading = gtk::Box::builder()
+    let identity = gtk::Box::builder()
         .orientation(gtk::Orientation::Horizontal)
         .spacing(8)
+        .valign(gtk::Align::Start)
         .build();
-    senders::append_reply_identity(state, &heading, &msg);
-    heading.append(
+    senders::append_reply_identity(state, &identity, &msg);
+    quote.append(&identity);
+    let body = gtk::Box::builder()
+        .orientation(gtk::Orientation::Vertical)
+        .spacing(4)
+        .css_classes(["line-reply-preview"])
+        .build();
+    quote.append(&body);
+    let quote = &body;
+    quote.append(
         &gtk::Label::builder()
             .label(crate::i18n::tf(
                 "replying_to",
@@ -134,7 +158,6 @@ fn render(state: &AppState, quote: &gtk::Box, id: &str) {
             .max_width_chars(42)
             .build(),
     );
-    quote.append(&heading);
     let video = msg.content_type.eq_ignore_ascii_case("VIDEO");
     if !video && !msg.content_type.eq_ignore_ascii_case("IMAGE") {
         return;
@@ -143,7 +166,6 @@ fn render(state: &AppState, quote: &gtk::Box, id: &str) {
         unavailable(quote);
         return;
     };
-    let open_path = original_path.to_owned();
     if let Some(path) = path {
         let picture = gtk::Picture::builder()
             .content_fit(gtk::ContentFit::Contain)
@@ -195,24 +217,100 @@ fn render(state: &AppState, quote: &gtk::Box, id: &str) {
         unavailable(quote);
         return;
     }
-    let s = state.clone();
-    let weak = quote.downgrade();
-    let original_id = id.to_owned();
-    let click = gtk::GestureClick::new();
-    click.set_button(1);
-    click.connect_released(move |_, _, _, _| {
-        let valid = !s.unsent_msg_ids.borrow().contains(&original_id);
-        if valid && std::path::Path::new(&open_path).is_file() {
-            open_media_viewer(&s, &open_path, &msg.content_type, &suggest_media_name(&msg));
-        } else if let Some(quote) = weak.upgrade() {
-            unavailable(&quote);
-        }
-    });
-    // Attach to the replaceable child so refreshes also discard old handlers.
-    if let Some(child) = quote.first_child() {
-        child.set_cursor_from_name(Some("pointer"));
-        child.add_controller(click);
+}
+
+fn message_bubble(widget: &gtk::Widget) -> Option<gtk::Widget> {
+    if widget.has_css_class("line-bubble") {
+        return Some(widget.clone());
     }
+    let mut child = widget.first_child();
+    while let Some(widget) = child {
+        if let Some(bubble) = message_bubble(&widget) {
+            return Some(bubble);
+        }
+        child = widget.next_sibling();
+    }
+    None
+}
+
+pub(super) fn jump_to_original(state: &AppState, id: &str) {
+    let token = state.reply_ui.borrow().jump.clone();
+    let request = token.get().wrapping_add(1);
+    token.set(request);
+    let generation = *state.history_generation.borrow();
+    let message_generation = *state.message_generation.borrow();
+    let s = state.clone();
+    let id = id.to_owned();
+    let start = std::time::Instant::now();
+    let mut previous_cursor = None;
+    let mut positioned = false;
+    *state.stick_bottom.borrow_mut() = false;
+    *state.scroll_pin_gen.borrow_mut() += 1;
+    if !*state.history_loading.borrow() {
+        *state.scroll_pinning.borrow_mut() = false;
+    }
+    glib::timeout_add_local(std::time::Duration::from_millis(50), move || {
+        if token.get() != request
+            || *s.history_generation.borrow() != generation
+            || *s.message_generation.borrow() != message_generation
+            || !*s.session_ready.borrow()
+        {
+            return glib::ControlFlow::Break;
+        }
+        if s.unsent_msg_ids.borrow().contains(&id) || start.elapsed().as_secs() >= 30 {
+            toast(&s, &crate::i18n::t("reply_original_unavailable"));
+            return glib::ControlFlow::Break;
+        }
+        if *s.history_loading.borrow() || *s.scroll_pinning.borrow() {
+            return glib::ControlFlow::Continue;
+        }
+        let row = s.message_rows.borrow().get(&id).cloned();
+        if let Some(row) = row {
+            if !positioned {
+                positioned = s.message_list.scroll_to_row(&row);
+                return glib::ControlFlow::Continue;
+            }
+            if !row.is_mapped() {
+                return glib::ControlFlow::Continue;
+            }
+            if let Some(bounds) = row.compute_bounds(&s.message_scroll) {
+                let adj = s.message_scroll.vadjustment();
+                let value = adj.value() + f64::from(bounds.y())
+                    - ((adj.page_size() - f64::from(bounds.height())) / 2.0).max(0.0);
+                adj.set_value(value.clamp(
+                    adj.lower(),
+                    (adj.upper() - adj.page_size()).max(adj.lower()),
+                ));
+            }
+            if let Some(bubble) = message_bubble(row.upcast_ref()) {
+                bubble.remove_css_class("line-reply-shake");
+                let weak = bubble.downgrade();
+                glib::timeout_add_local_once(std::time::Duration::from_millis(20), move || {
+                    if let Some(bubble) = weak.upgrade() {
+                        bubble.add_css_class("line-reply-shake");
+                        let weak = bubble.downgrade();
+                        glib::timeout_add_local_once(
+                            std::time::Duration::from_secs(1),
+                            move || {
+                                if let Some(bubble) = weak.upgrade() {
+                                    bubble.remove_css_class("line-reply-shake");
+                                }
+                            },
+                        );
+                    }
+                });
+            }
+            return glib::ControlFlow::Break;
+        }
+        let cursor = s.history_cursor.borrow().clone();
+        if !*s.history_has_more.borrow() || cursor.is_none() || cursor == previous_cursor {
+            toast(&s, &crate::i18n::t("reply_original_unavailable"));
+            return glib::ControlFlow::Break;
+        }
+        previous_cursor = cursor;
+        load_older_messages(&s);
+        glib::ControlFlow::Continue
+    });
 }
 
 pub(super) fn refresh(state: &AppState, id: &str) {

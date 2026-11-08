@@ -484,12 +484,12 @@ pub fn build_shell_page() -> ShellWidgets {
         .margin_start(12)
         .margin_end(12)
         .visible(false)
-        .css_classes(["line-reply-preview"])
         .build();
     let reply_label = gtk::Label::builder()
         .xalign(0.0)
         .hexpand(true)
         .ellipsize(gtk::pango::EllipsizeMode::End)
+        .css_classes(["line-reply-preview"])
         .build();
     let reply_identity = gtk::Box::builder()
         .spacing(8)
@@ -1021,6 +1021,12 @@ pub fn load_css() {
             border: 1px solid alpha(@accent_bg_color, 0.18);
         }
         .line-bubble-text { font-size: 0.98em; }
+        @keyframes line-reply-shake {
+            0%, 100% { transform: translateX(0); }
+            8.333%, 41.667%, 75% { transform: translateX(-4px); }
+            25%, 58.333%, 91.667% { transform: translateX(4px); }
+        }
+        .line-reply-shake { animation: line-reply-shake 1s linear; }
         .line-msg-status {
             font-size: 0.72em;
             opacity: 0.65;
