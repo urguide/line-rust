@@ -1599,6 +1599,8 @@ pub(super) fn filter_chats(state: &AppState, query: &str) {
         row.set_visible(visible && !hidden);
         idx += 1;
     }
+    drop(chats);
+    refresh_pinned_divider(state);
 }
 
 pub(super) fn append_flex_card(

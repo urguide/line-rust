@@ -653,7 +653,7 @@ pub fn load_css() {
 
         /* Compact sidebar: select the avatar frame, not a full-width pill. */
         .line-sidebar-compact .line-chat-list row {
-            margin: 2px 0;
+            margin: 1px 0;
             border-radius: 0;
             padding: 0;
             background: transparent;
@@ -698,7 +698,7 @@ pub fn load_css() {
         }
         .line-chat-list { background: transparent; }
         .line-chat-list row {
-            margin: 2px 8px;
+            margin: 1px 4px;
             border-radius: 12px;
             padding: 0;
         }
@@ -991,11 +991,11 @@ pub fn load_css() {
             padding: 0 4px;
             font-size: 0.7em;
         }
-        .line-chat-pin {
-            background: @accent_bg_color;
-            color: @accent_fg_color;
-            border-radius: 999px;
-            padding: 3px;
+        .line-chat-list row.line-pinned-divider,
+        .line-sidebar-compact .line-chat-list row.line-pinned-divider {
+            border-bottom: 3px solid alpha(@window_fg_color, 0.45);
+            border-bottom-left-radius: 0;
+            border-bottom-right-radius: 0;
         }
         .line-msg-scroll {
             background: transparent;
@@ -1008,7 +1008,7 @@ pub fn load_css() {
         }
         .line-bubble {
             border-radius: 16px;
-            padding: 8px 12px;
+            padding: 4px 6px;
             box-shadow: 0 1px 2px alpha(@window_fg_color, 0.08);
             max-width: min(480px, 72%);
         }

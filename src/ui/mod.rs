@@ -873,17 +873,17 @@ fn apply_chat_row_compact(row: &gtk::ListBoxRow, compact: bool) {
         box_.set_hexpand(false);
         box_.set_margin_start(0);
         box_.set_margin_end(0);
-        box_.set_margin_top(8);
-        box_.set_margin_bottom(8);
+        box_.set_margin_top(4);
+        box_.set_margin_bottom(4);
         box_.set_spacing(0);
     } else {
         box_.set_halign(gtk::Align::Fill);
         box_.set_hexpand(true);
-        box_.set_margin_start(8);
-        box_.set_margin_end(8);
-        box_.set_margin_top(8);
-        box_.set_margin_bottom(8);
-        box_.set_spacing(12);
+        box_.set_margin_start(4);
+        box_.set_margin_end(4);
+        box_.set_margin_top(4);
+        box_.set_margin_bottom(4);
+        box_.set_spacing(6);
     }
 }
 

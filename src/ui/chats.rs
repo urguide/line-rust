@@ -9,6 +9,25 @@ fn pinned_chats(state: &AppState) -> BTreeSet<String> {
         .unwrap_or_default()
 }
 
+/// Mark the last visible pinned chat without adding a row that would shift
+/// the indices used by selection, context menus and live chat updates.
+pub(super) fn refresh_pinned_divider(state: &AppState) {
+    let pinned = pinned_chats(state);
+    let chats = state.chats.borrow();
+    let mut last = None;
+    for (index, chat) in chats.iter().enumerate() {
+        if let Some(row) = state.chat_list.row_at_index(index as i32) {
+            row.remove_css_class("line-pinned-divider");
+            if row.is_visible() && pinned.contains(&chat.mid) {
+                last = Some(row);
+            }
+        }
+    }
+    if let Some(row) = last {
+        row.add_css_class("line-pinned-divider");
+    }
+}
+
 pub(super) fn chat_is_hidden(state: &AppState, mid: &str) -> bool {
     state
         .config
@@ -334,11 +353,7 @@ pub(super) fn apply_chats(state: &AppState, mut chats: Vec<ChatInfo>, cached: bo
     }
 
     for chat in &chats {
-        let (row, avatar, preview, badge) = build_chat_row(
-            chat,
-            *state.sidebar_compact.borrow(),
-            pinned.contains(&chat.mid),
-        );
+        let (row, avatar, preview, badge) = build_chat_row(chat, *state.sidebar_compact.borrow());
         state
             .chat_avatars
             .borrow_mut()
@@ -464,11 +479,7 @@ pub(super) fn upsert_chat_row(state: &AppState, chat: ChatInfo) {
     }
 
     let pinned = pinned_chats(state);
-    let (row, avatar, preview, badge) = build_chat_row(
-        &chat,
-        *state.sidebar_compact.borrow(),
-        pinned.contains(&mid),
-    );
+    let (row, avatar, preview, badge) = build_chat_row(&chat, *state.sidebar_compact.borrow());
     state.chat_avatars.borrow_mut().insert(mid.clone(), avatar);
     state
         .chat_previews
@@ -524,6 +535,7 @@ pub(super) fn promote_chat_to_top(state: &AppState, mid: &str) {
         }
     }
     // Keep selection on the open chat after row reorder.
+    refresh_pinned_divider(state);
     select_sidebar_chat(state, state.current_chat.borrow().as_deref());
     refresh_tray_menu(state);
 }
@@ -584,17 +596,16 @@ pub(super) fn maybe_restore_last_chat(state: &AppState) {
 pub(super) fn build_chat_row(
     chat: &ChatInfo,
     compact: bool,
-    pinned: bool,
 ) -> (gtk::ListBoxRow, gtk::Picture, gtk::Label, gtk::Label) {
     let row = gtk::ListBoxRow::new();
     row.set_tooltip_text(Some(&chat.name));
     let box_ = gtk::Box::builder()
         .orientation(gtk::Orientation::Horizontal)
-        .spacing(if compact { 0 } else { 12 })
-        .margin_start(if compact { 0 } else { 8 })
-        .margin_end(if compact { 0 } else { 8 })
-        .margin_top(8)
-        .margin_bottom(8)
+        .spacing(if compact { 0 } else { 6 })
+        .margin_start(if compact { 0 } else { 4 })
+        .margin_end(if compact { 0 } else { 4 })
+        .margin_top(4)
+        .margin_bottom(4)
         .hexpand(!compact)
         .halign(if compact {
             gtk::Align::Center
@@ -649,18 +660,6 @@ pub(super) fn build_chat_row(
         .visible(chat.unread > 0)
         .build();
     avatar_overlay.add_overlay(&badge);
-
-    if pinned {
-        let pin = gtk::Image::builder()
-            .icon_name("view-pin-symbolic")
-            .pixel_size(12)
-            .halign(gtk::Align::Start)
-            .valign(gtk::Align::Start)
-            .tooltip_text(crate::i18n::t("chat_pinned"))
-            .css_classes(["line-chat-pin"])
-            .build();
-        avatar_overlay.add_overlay(&pin);
-    }
 
     let text_col = gtk::Box::builder()
         .orientation(gtk::Orientation::Vertical)
