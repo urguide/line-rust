@@ -24,6 +24,10 @@ pub(super) fn reply_identity(state: &AppState, message: &MessageInfo) {
     while let Some(child) = state.reply_identity.first_child() {
         state.reply_identity.remove(&child);
     }
+    append_reply_identity(state, &state.reply_identity, message);
+}
+
+pub(super) fn append_reply_identity(state: &AppState, container: &gtk::Box, message: &MessageInfo) {
     let own = message.mine || state.self_mid.borrow().as_deref() == Some(message.from.as_str());
     let profile = state
         .sender_ui
@@ -91,21 +95,29 @@ pub(super) fn reply_identity(state: &AppState, message: &MessageInfo) {
     picture.connect_paintable_notify(move |p| placeholder.set_visible(p.paintable().is_none()));
     // A fresh widget per target keeps late image decodes on the old preview.
     if let Some(path) = path.filter(|p| std::path::Path::new(p).is_file()) {
-        attach_texture_async(picture, path, 32);
+        attach_texture_async(picture.clone(), path, 32);
     }
     let column = gtk::Box::new(gtk::Orientation::Vertical, 0);
     column.set_valign(gtk::Align::Center);
     column.append(&avatar);
-    state.reply_identity.append(&column);
-    state.reply_identity.append(
-        &gtk::Label::builder()
-            .label(&name)
-            .tooltip_text(&name)
-            .ellipsize(gtk::pango::EllipsizeMode::End)
-            .max_width_chars(16)
-            .css_classes(["heading"])
-            .build(),
-    );
+    container.append(&column);
+    let label = gtk::Label::builder()
+        .label(&name)
+        .tooltip_text(&name)
+        .ellipsize(gtk::pango::EllipsizeMode::End)
+        .max_width_chars(16)
+        .css_classes(["heading"])
+        .build();
+    container.append(&label);
+    if !message.from.is_empty() {
+        let mut ui = state.sender_ui.borrow_mut();
+        let slots = ui.slots.entry(message.from.clone()).or_default();
+        slots.retain(|slot| slot.name.upgrade().is_some() && slot.picture.upgrade().is_some());
+        slots.push(SenderSlot {
+            name: label.downgrade(),
+            picture: picture.downgrade(),
+        });
+    }
     if !own
         && profile.is_none()
         && !message.from.is_empty()

@@ -117,19 +117,26 @@ fn render(state: &AppState, quote: &gtk::Box, id: &str) {
         unavailable(quote);
         return;
     };
+    let heading = gtk::Box::builder()
+        .orientation(gtk::Orientation::Horizontal)
+        .spacing(8)
+        .build();
+    senders::append_reply_identity(state, &heading, &msg);
+    heading.append(
+        &gtk::Label::builder()
+            .label(crate::i18n::tf(
+                "replying_to",
+                &[("message", &reply_summary(&msg))],
+            ))
+            .xalign(0.0)
+            .hexpand(true)
+            .ellipsize(gtk::pango::EllipsizeMode::End)
+            .max_width_chars(42)
+            .build(),
+    );
+    quote.append(&heading);
     let video = msg.content_type.eq_ignore_ascii_case("VIDEO");
     if !video && !msg.content_type.eq_ignore_ascii_case("IMAGE") {
-        quote.append(
-            &gtk::Label::builder()
-                .label(crate::i18n::tf(
-                    "replying_to",
-                    &[("message", &reply_summary(&msg))],
-                ))
-                .xalign(0.0)
-                .ellipsize(gtk::pango::EllipsizeMode::End)
-                .max_width_chars(42)
-                .build(),
-        );
         return;
     }
     let Some((path, original_path)) = cached_media_paths(&msg) else {
