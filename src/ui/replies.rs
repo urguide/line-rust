@@ -215,7 +215,6 @@ fn render(state: &AppState, quote: &gtk::Box, id: &str) {
         quote.append(&player);
     } else {
         unavailable(quote);
-        return;
     }
 }
 
