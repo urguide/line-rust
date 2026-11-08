@@ -278,6 +278,7 @@ Use the local recipe to download and install the latest prebuilt release:
 ```bash
 git clone https://github.com/urguide/line-rust.git
 cd line-rust/aur
+sudo pacman -S --needed curl jq
 makepkg -si
 ```
 

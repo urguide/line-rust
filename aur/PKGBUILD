@@ -6,6 +6,7 @@ arch=('x86_64' 'aarch64')
 url='https://github.com/urguide/line-rust'
 license=('GPL-3.0-or-later')
 depends=('gtk4>=4.14' 'libadwaita>=1.5' 'ffmpeg' 'hicolor-icon-theme')
+makedepends=('curl' 'jq')
 optdepends=(
   'poppler: PDF preview in media viewer'
   'gst-plugins-good: extra video playback codecs'
@@ -15,16 +16,24 @@ conflicts=('line-rust-git' 'line-gtk' 'line-gtk-git')
 # Preserve the embedded payload in the Deno-compiled protocol executable.
 options=('!strip')
 
-# Local-use recipe: sourcing this file requires curl and network access.
+# Local-use recipe: install curl and jq before sourcing; network access is required.
 # Resolve the latest stable release once, then pin all downloads to that tag.
 _resolve_release() {
-  local release_url tag checksums architecture checksum
+  local release tag checksums architecture checksum dependency
 
-  release_url=$(curl -fsSLI --retry 2 --connect-timeout 10 --max-time 60 \
-    -o /dev/null -w '%{url_effective}' "${url}/releases/latest") || return 1
-  tag=${release_url##*/}
+  for dependency in curl jq; do
+    if ! command -v "$dependency" >/dev/null 2>&1; then
+      printf 'Install curl and jq before running makepkg: sudo pacman -S --needed curl jq\n' >&2
+      return 1
+    fi
+  done
+
+  release=$(curl -fsSL --retry 2 --connect-timeout 10 --max-time 60 \
+    -H 'Accept: application/vnd.github+json' \
+    "https://api.github.com/repos/${url#https://github.com/}/releases/latest") || return 1
+  tag=$(jq -er '.tag_name | strings' <<< "$release") || return 1
   if [[ ! $tag =~ ^v([0-9]+\.[0-9]+\.[0-9]+)$ ]]; then
-    printf 'Could not resolve a stable release: %s\n' "$release_url" >&2
+    printf 'Could not resolve a stable release: %s\n' "$tag" >&2
     return 1
   fi
   pkgver=${BASH_REMATCH[1]}
