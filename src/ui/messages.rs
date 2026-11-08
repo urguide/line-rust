@@ -1615,6 +1615,14 @@ pub(super) fn handle_flex_action(
     }
 }
 
+fn link_chip_label(url: &str) -> String {
+    if url.chars().count() > 48 {
+        format!("{}…", url.chars().take(45).collect::<String>())
+    } else {
+        url.to_owned()
+    }
+}
+
 pub(super) fn append_link_chips(_state: &AppState, bubble: &gtk::Box, text: &str) {
     for url in extract_urls(text).into_iter().take(4) {
         if youtube_id(&url).is_some() {
@@ -1640,11 +1648,7 @@ pub(super) fn append_link_chips(_state: &AppState, bubble: &gtk::Box, text: &str
             continue;
         }
         let btn = gtk::LinkButton::builder()
-            .label(if url.len() > 48 {
-                format!("{}…", &url[..45])
-            } else {
-                url.clone()
-            })
+            .label(link_chip_label(&url))
             .uri(&url)
             .css_classes(["line-link-chip"])
             .build();
@@ -1959,6 +1963,45 @@ pub(super) fn jump_to_latest(state: &AppState) {
 
 #[cfg(test)]
 mod receipt_tests {
+    #[test]
+    fn link_chip_label_handles_the_reported_chinese_url_boundary() {
+        let prefix = format!("https://example.com/{}", "a".repeat(23));
+        assert_eq!(prefix.len(), 43);
+        let url = format!("{prefix}唯一中文");
+        assert!(url.len() > 48);
+        assert!(!url.is_char_boundary(45));
+        assert_eq!(super::link_chip_label(&url), url);
+
+        let long_url = format!("{url}測試網址");
+        assert_eq!(super::link_chip_label(&long_url), format!("{prefix}唯一…"));
+    }
+
+    #[test]
+    fn link_chip_label_handles_multibyte_characters_at_the_cutoff() {
+        for character in ["é", "中", "😀"] {
+            let prefix = format!("https://example.com/{}", "a".repeat(24));
+            let url = format!("{prefix}{}", character.repeat(5));
+            assert!(!url.is_char_boundary(45));
+            assert_eq!(
+                super::link_chip_label(&url),
+                format!("{prefix}{character}…")
+            );
+        }
+    }
+
+    #[test]
+    fn link_chip_label_preserves_the_ascii_length_threshold() {
+        for length in [0, 44, 45, 48, 49, 100] {
+            let url = "a".repeat(length);
+            let expected = if length > 48 {
+                format!("{}…", "a".repeat(45))
+            } else {
+                url.clone()
+            };
+            assert_eq!(super::link_chip_label(&url), expected);
+        }
+    }
+
     #[test]
     fn message_grouping_uses_adjacent_messages_with_an_inclusive_five_minute_limit() {
         use super::message_boundary;
