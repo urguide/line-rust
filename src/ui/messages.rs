@@ -780,8 +780,24 @@ fn https_urls_for_clipboard(text: &str) -> String {
                 c.is_whitespace()
                     || matches!(
                         c,
-                        '<' | '>' | '"' | '\'' | '`' | '，' | '。' | '；' | '！' | '？'
-                            | '「' | '」' | '『' | '』' | '（' | '）' | '【' | '】' | '、'
+                        '<' | '>'
+                            | '"'
+                            | '\''
+                            | '`'
+                            | '，'
+                            | '。'
+                            | '；'
+                            | '！'
+                            | '？'
+                            | '「'
+                            | '」'
+                            | '『'
+                            | '』'
+                            | '（'
+                            | '）'
+                            | '【'
+                            | '】'
+                            | '、'
                     )
             })
             .unwrap_or(rest.len());
@@ -792,7 +808,9 @@ fn https_urls_for_clipboard(text: &str) -> String {
                 url = trimmed;
                 continue;
             }
-            let Some(last) = url.chars().last() else { break };
+            let Some(last) = url.chars().last() else {
+                break;
+            };
             let opening = match last {
                 ')' => '(',
                 ']' => '[',
@@ -2071,11 +2089,27 @@ mod receipt_tests {
     #[test]
     fn copy_https_urls_preserves_order_queries_duplicates_and_balanced_brackets() {
         let text = "網址：https://example.com/a?q=1&b=2#section，另見（https://example.org/wiki/Test_(one)）。\n<https://example.net/三> https://[::1]/path https://example.com/a?q=1&b=2#section";
-        assert_eq!(super::https_urls_for_clipboard(text), "https://example.com/a?q=1&b=2#section\nhttps://example.org/wiki/Test_(one)\nhttps://example.net/三\nhttps://[::1]/path\nhttps://example.com/a?q=1&b=2#section");
-        assert_eq!(super::https_urls_for_clipboard("[link](https://example.com/a). \"https://example.org/b\"; http://example.net https://"), "https://example.com/a\nhttps://example.org/b");
-        assert_eq!(super::https_urls_for_clipboard("沒有網址 http://example.com"), "");
-        let many = (0..8).map(|n| format!("https://example.com/{n}")).collect::<Vec<_>>();
-        assert_eq!(super::https_urls_for_clipboard(&many.join(" ")), many.join("\n"));
+        assert_eq!(
+            super::https_urls_for_clipboard(text),
+            "https://example.com/a?q=1&b=2#section\nhttps://example.org/wiki/Test_(one)\nhttps://example.net/三\nhttps://[::1]/path\nhttps://example.com/a?q=1&b=2#section"
+        );
+        assert_eq!(
+            super::https_urls_for_clipboard(
+                "[link](https://example.com/a). \"https://example.org/b\"; http://example.net https://"
+            ),
+            "https://example.com/a\nhttps://example.org/b"
+        );
+        assert_eq!(
+            super::https_urls_for_clipboard("沒有網址 http://example.com"),
+            ""
+        );
+        let many = (0..8)
+            .map(|n| format!("https://example.com/{n}"))
+            .collect::<Vec<_>>();
+        assert_eq!(
+            super::https_urls_for_clipboard(&many.join(" ")),
+            many.join("\n")
+        );
     }
     #[test]
     fn message_grouping_uses_adjacent_messages_with_an_inclusive_five_minute_limit() {
