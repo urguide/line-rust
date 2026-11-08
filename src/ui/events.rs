@@ -270,11 +270,11 @@ pub(super) fn handle_event(state: &AppState, ev: ProtocolEvent) {
             }
         }
         ProtocolEvent::AvatarReady { mid, avatar_path } => {
-            senders::avatar_ready(state, &mid, &avatar_path);
             if state.self_mid.borrow().as_deref() == Some(mid.as_str()) {
                 *state.self_avatar_path.borrow_mut() = Some(avatar_path.clone());
                 sync_discord_rpc(state);
             }
+            senders::avatar_ready(state, &mid, &avatar_path);
             if let Some(img) = state.chat_avatars.borrow().get(&mid).cloned()
                 && std::path::Path::new(&avatar_path).exists()
             {

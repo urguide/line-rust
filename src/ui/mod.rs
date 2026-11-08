@@ -153,6 +153,7 @@ fn build_ui(app: &Application, repo_root: PathBuf, data_dir: PathBuf) -> Result<
         composer_row: shell.composer_row,
         reply_bar: shell.reply_bar,
         reply_label: shell.reply_label,
+        reply_identity: shell.reply_identity,
         reply_cancel: shell.reply_cancel,
         reply_target: Rc::new(RefCell::new(None)),
         message_index: Rc::new(RefCell::new(HashMap::new())),

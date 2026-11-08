@@ -20,6 +20,126 @@ pub(super) fn clear_slots(state: &AppState) {
     state.sender_ui.borrow_mut().slots.clear();
 }
 
+pub(super) fn reply_identity(state: &AppState, message: &MessageInfo) {
+    while let Some(child) = state.reply_identity.first_child() {
+        state.reply_identity.remove(&child);
+    }
+    let own = message.mine || state.self_mid.borrow().as_deref() == Some(message.from.as_str());
+    let profile = state
+        .sender_ui
+        .borrow()
+        .profiles
+        .get(&message.from)
+        .cloned()
+        .or_else(|| {
+            state
+                .chats
+                .borrow()
+                .iter()
+                .find(|c| c.mid == message.from)
+                .cloned()
+        })
+        .or_else(|| {
+            state.friends_ui.borrow().as_ref().and_then(|ui| {
+                ui.friends
+                    .borrow()
+                    .iter()
+                    .find(|c| c.mid == message.from)
+                    .cloned()
+            })
+        });
+    let (name, path) = if own {
+        (
+            state.self_display_name.borrow().clone(),
+            state.self_avatar_path.borrow().clone(),
+        )
+    } else if let Some(profile) = &profile {
+        (
+            profile
+                .alias
+                .as_deref()
+                .filter(|s| !s.trim().is_empty())
+                .unwrap_or(&profile.name)
+                .to_owned(),
+            profile.avatar_path.clone(),
+        )
+    } else {
+        (message.from.clone(), None)
+    };
+    let picture = gtk::Picture::builder()
+        .width_request(32)
+        .height_request(32)
+        .can_shrink(true)
+        .content_fit(gtk::ContentFit::Cover)
+        .build();
+    let avatar = gtk::Overlay::builder()
+        .child(&picture)
+        .width_request(32)
+        .height_request(32)
+        .halign(gtk::Align::Start)
+        .valign(gtk::Align::Center)
+        .overflow(gtk::Overflow::Hidden)
+        .css_classes(["line-msg-avatar"])
+        .build();
+    let placeholder = gtk::Image::builder()
+        .icon_name("avatar-default-symbolic")
+        .pixel_size(24)
+        .halign(gtk::Align::Center)
+        .valign(gtk::Align::Center)
+        .build();
+    avatar.add_overlay(&placeholder);
+    picture.connect_paintable_notify(move |p| placeholder.set_visible(p.paintable().is_none()));
+    // A fresh widget per target keeps late image decodes on the old preview.
+    if let Some(path) = path.filter(|p| std::path::Path::new(p).is_file()) {
+        attach_texture_async(picture, path, 32);
+    }
+    let column = gtk::Box::new(gtk::Orientation::Vertical, 0);
+    column.set_valign(gtk::Align::Center);
+    column.append(&avatar);
+    state.reply_identity.append(&column);
+    state.reply_identity.append(
+        &gtk::Label::builder()
+            .label(&name)
+            .tooltip_text(&name)
+            .ellipsize(gtk::pango::EllipsizeMode::End)
+            .max_width_chars(16)
+            .css_classes(["heading"])
+            .build(),
+    );
+    if !own
+        && profile.is_none()
+        && !message.from.is_empty()
+        && *state.session_ready.borrow()
+        && !state.pending.borrow().values().any(|p| {
+            matches!(p, Pending::SenderProfile { mid, generation }
+            if mid == &message.from && *generation == *state.history_generation.borrow())
+        })
+        && let Ok(id) = state.sidecar.request(
+            "sender_profile",
+            Some(serde_json::json!({"mid":message.from})),
+        )
+    {
+        state.pending.borrow_mut().insert(
+            id,
+            Pending::SenderProfile {
+                mid: message.from.clone(),
+                generation: *state.history_generation.borrow(),
+            },
+        );
+    }
+}
+
+fn refresh_reply_sender(state: &AppState, mid: &str) {
+    let matches = state
+        .reply_target
+        .borrow()
+        .as_ref()
+        .is_some_and(|target| target.message.from == mid);
+    if matches {
+        refresh_reply_preview(state);
+    }
+}
+
 pub(super) fn append(
     state: &AppState,
     msg: &MessageInfo,
@@ -214,6 +334,8 @@ pub(super) fn apply_profile(state: &AppState, profile: &mut ChatInfo) {
         });
     }
     ui.profiles.insert(mid.to_owned(), profile.clone());
+    drop(ui);
+    refresh_reply_sender(state, mid);
 }
 
 pub(super) fn avatar_ready(state: &AppState, mid: &str, path: &str) {
@@ -232,6 +354,8 @@ pub(super) fn avatar_ready(state: &AppState, mid: &str, path: &str) {
             true
         });
     }
+    drop(ui);
+    refresh_reply_sender(state, mid);
 }
 
 #[cfg(test)]

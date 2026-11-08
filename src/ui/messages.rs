@@ -626,6 +626,9 @@ pub(super) fn clear_reply(state: &AppState) {
     *state.reply_target.borrow_mut() = None;
     state.reply_bar.set_visible(false);
     state.reply_label.set_text("");
+    while let Some(child) = state.reply_identity.first_child() {
+        state.reply_identity.remove(&child);
+    }
 }
 
 pub(super) fn reply_summary(msg: &MessageInfo) -> String {
@@ -648,6 +651,7 @@ pub(super) fn reply_summary(msg: &MessageInfo) -> String {
 
 pub(super) fn refresh_reply_preview(state: &AppState) {
     if let Some(target) = state.reply_target.borrow().as_ref() {
+        senders::reply_identity(state, &target.message);
         state.reply_label.set_text(&crate::i18n::tf(
             "replying_to",
             &[("message", &reply_summary(&target.message))],

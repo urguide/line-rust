@@ -53,6 +53,7 @@ pub(super) struct AppState {
     pub composer_row: gtk::Box,
     pub reply_bar: gtk::Box,
     pub reply_label: gtk::Label,
+    pub reply_identity: gtk::Box,
     pub reply_cancel: gtk::Button,
     pub reply_target: Rc<RefCell<Option<ReplyTarget>>>,
     pub message_index: Rc<RefCell<HashMap<String, MessageInfo>>>,

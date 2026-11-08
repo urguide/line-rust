@@ -9,6 +9,7 @@ pub struct ShellWidgets {
     pub composer_row: gtk::Box,
     pub reply_bar: gtk::Box,
     pub reply_label: gtk::Label,
+    pub reply_identity: gtk::Box,
     pub reply_cancel: gtk::Button,
     pub composer_stack: gtk::Stack,
     pub record_cancel_btn: gtk::Button,
@@ -490,11 +491,16 @@ pub fn build_shell_page() -> ShellWidgets {
         .hexpand(true)
         .ellipsize(gtk::pango::EllipsizeMode::End)
         .build();
+    let reply_identity = gtk::Box::builder()
+        .spacing(8)
+        .valign(gtk::Align::Center)
+        .build();
     let reply_cancel = gtk::Button::builder()
         .icon_name("window-close-symbolic")
         .tooltip_text(crate::i18n::t("cancel_reply"))
         .css_classes(["flat", "circular"])
         .build();
+    reply_bar.append(&reply_identity);
     reply_bar.append(&reply_label);
     reply_bar.append(&reply_cancel);
 
@@ -569,6 +575,7 @@ pub fn build_shell_page() -> ShellWidgets {
         composer_row,
         reply_bar,
         reply_label,
+        reply_identity,
         reply_cancel,
         composer_stack,
         record_cancel_btn,
