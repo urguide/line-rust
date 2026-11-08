@@ -312,6 +312,11 @@ pub(super) fn jump_to_original(state: &AppState, id: &str) {
     });
 }
 
+pub(super) fn cancel_jump(state: &AppState) {
+    let token = state.reply_ui.borrow().jump.clone();
+    token.set(token.get().wrapping_add(1));
+}
+
 pub(super) fn refresh(state: &AppState, id: &str) {
     let slots: Vec<_> = state
         .reply_ui

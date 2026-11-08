@@ -990,6 +990,7 @@ fn wire_scroll_pin(state: &AppState) {
     let s = state.clone();
     state.message_list.widget().add_tick_callback(move |_, _| {
         update_memory_viewport(&s);
+        update_jump_banner(&s);
         glib::ControlFlow::Continue
     });
 
@@ -1001,7 +1002,7 @@ fn wire_scroll_pin(state: &AppState) {
             return;
         }
         let target = (adj.upper() - adj.page_size()).max(0.0);
-        let near_bottom = adj.value() + 120.0 >= target;
+        let near_bottom = adj.value() + 2.0 >= target;
         if adj.value() <= 80.0 && !*s.stick_bottom.borrow() {
             load_older_messages(&s);
         }
@@ -1015,6 +1016,7 @@ fn wire_scroll_pin(state: &AppState) {
             // Scrollbar drag / key scroll away from bottom.
             *s.stick_bottom.borrow_mut() = false;
         }
+        update_jump_banner(&s);
     });
 }
 
@@ -1424,6 +1426,31 @@ fn wire_actions(state: &AppState) {
         glib::Propagation::Proceed
     });
     state.window.add_controller(esc_win);
+
+    let navigation = gtk::EventControllerKey::new();
+    navigation.set_propagation_phase(gtk::PropagationPhase::Capture);
+    let s = state.clone();
+    navigation.connect_key_pressed(move |_, key, _, modifiers| {
+        if !state_chat_open(&s)
+            || mentions::is_preediting(&s)
+            || modifiers.intersects(
+                gdk::ModifierType::SHIFT_MASK
+                    | gdk::ModifierType::CONTROL_MASK
+                    | gdk::ModifierType::ALT_MASK
+                    | gdk::ModifierType::SUPER_MASK,
+            )
+        {
+            return glib::Propagation::Proceed;
+        }
+        match key {
+            gdk::Key::End | gdk::Key::KP_End => jump_to_latest(&s),
+            gdk::Key::Page_Up | gdk::Key::KP_Page_Up => scroll_message_page(&s, false),
+            gdk::Key::Page_Down | gdk::Key::KP_Page_Down => scroll_message_page(&s, true),
+            _ => return glib::Propagation::Proceed,
+        }
+        glib::Propagation::Stop
+    });
+    state.conversation.add_controller(navigation);
 
     let s = state.clone();
     state.jump_banner_btn.connect_clicked(move |_| {

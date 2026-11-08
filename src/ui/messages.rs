@@ -143,7 +143,11 @@ pub(super) fn prepend_messages(state: &AppState, mut messages: Vec<MessageInfo>)
             return glib::ControlFlow::Continue;
         }
         let adj = s.message_scroll.vadjustment();
-        adj.set_value(old_value + (adj.upper() - old_upper).max(0.0));
+        if *s.stick_bottom.borrow() {
+            scroll_last_row_into_view(&s);
+        } else {
+            adj.set_value(old_value + (adj.upper() - old_upper).max(0.0));
+        }
         *s.scroll_pinning.borrow_mut() = false;
         glib::ControlFlow::Break
     });
@@ -2029,7 +2033,10 @@ pub(super) fn dismiss_new_marker(state: &AppState) {
 
 pub(super) fn update_jump_banner(state: &AppState) {
     let n = *state.pending_new_below.borrow();
-    let show = n > 0 && !*state.stick_bottom.borrow();
+    let adj = state.message_scroll.vadjustment();
+    let show = state_chat_open(state)
+        && adj.value() + 2.0 < (adj.upper() - adj.page_size()).max(adj.lower());
+    state.jump_banner_label.set_visible(n > 0);
     if show {
         let label = if n == 1 {
             crate::i18n::t("jump_new_one")
@@ -2042,12 +2049,38 @@ pub(super) fn update_jump_banner(state: &AppState) {
 }
 
 pub(super) fn jump_to_latest(state: &AppState) {
+    super::replies::cancel_jump(state);
     *state.pending_new_below.borrow_mut() = 0;
-    update_jump_banner(state);
     pin_messages_to_latest(state);
+    update_jump_banner(state);
     if let Some(mid) = state.current_chat.borrow().clone() {
         mark_chat_read(state, &mid);
         clear_unread_badge(state, &mid);
+    }
+}
+
+pub(super) fn scroll_message_page(state: &AppState, down: bool) {
+    super::replies::cancel_jump(state);
+    *state.scroll_pin_gen.borrow_mut() += 1;
+    *state.scroll_pinning.borrow_mut() = false;
+    *state.stick_bottom.borrow_mut() = false;
+    let adj = state.message_scroll.vadjustment();
+    let end = (adj.upper() - adj.page_size()).max(adj.lower());
+    let value = (adj.value()
+        + if down {
+            adj.page_size()
+        } else {
+            -adj.page_size()
+        })
+    .clamp(adj.lower(), end);
+    if down && value >= end {
+        jump_to_latest(state);
+    } else {
+        adj.set_value(value);
+        if !down && value <= 80.0 {
+            load_older_messages(state);
+        }
+        update_jump_banner(state);
     }
 }
 

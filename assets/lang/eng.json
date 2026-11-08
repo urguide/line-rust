@@ -1,4 +1,5 @@
 {
+  "jump_latest": "Jump to latest message (End)",
   "reply_original_unavailable": "Could not locate the original message.",
   "copy_message_all": "Copy all",
   "copy_message_urls": "Copy URLs",

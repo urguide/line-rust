@@ -353,16 +353,19 @@ pub fn build_shell_page() -> ShellWidgets {
     msg_stack.set_visible_child_name("idle");
 
     let jump_banner = gtk::Revealer::builder()
+        .halign(gtk::Align::Center)
+        .valign(gtk::Align::End)
         .transition_type(gtk::RevealerTransitionType::SlideUp)
         .transition_duration(180)
         .reveal_child(false)
         .css_classes(["line-jump-banner-revealer"])
         .build();
     let jump_banner_btn = gtk::Button::builder()
+        .tooltip_text(crate::i18n::t("jump_latest"))
         .css_classes(["pill", "line-jump-banner"])
         .halign(gtk::Align::Center)
         .margin_top(4)
-        .margin_bottom(4)
+        .margin_bottom(8)
         .build();
     let jump_inner = gtk::Box::builder()
         .orientation(gtk::Orientation::Horizontal)
@@ -372,8 +375,10 @@ pub fn build_shell_page() -> ShellWidgets {
     let jump_banner_label = gtk::Label::builder()
         .label(crate::i18n::t("new_messages_badge"))
         .css_classes(["caption"])
+        .visible(false)
         .build();
     let jump_icon = gtk::Image::from_icon_name("go-down-symbolic");
+    jump_icon.set_pixel_size(24);
     jump_inner.append(&jump_banner_label);
     jump_inner.append(&jump_icon);
     jump_banner_btn.set_child(Some(&jump_inner));
@@ -541,8 +546,13 @@ pub fn build_shell_page() -> ShellWidgets {
     sticker_popover.set_parent(&sticker_btn);
 
     conversation.append(&chat_bar);
-    conversation.append(&msg_stack);
-    conversation.append(&jump_banner);
+    let message_overlay = gtk::Overlay::builder()
+        .child(&msg_stack)
+        .vexpand(true)
+        .hexpand(true)
+        .build();
+    message_overlay.add_overlay(&jump_banner);
+    conversation.append(&message_overlay);
     conversation.append(&upload_revealer);
     conversation.append(&reply_bar);
     conversation.append(&composer_stack);
@@ -1079,10 +1089,12 @@ pub fn load_css() {
             margin-left: 8px;
         }
         .line-jump-banner {
+            opacity: 0.75;
             padding: 4px 16px;
             min-height: 28px;
             font-weight: 600;
         }
+        .line-jump-banner:hover, .line-jump-banner:focus-visible { opacity: 1; }
         .line-jump-banner-revealer {
             padding-top: 2px;
         }
