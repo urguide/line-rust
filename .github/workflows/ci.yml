@@ -38,9 +38,7 @@ jobs:
         working-directory: protocol
     steps:
       - uses: actions/checkout@v6
-      - uses: denoland/setup-deno@v2
-        with:
-          deno-version: v2.x
+      - uses: ./.github/actions/setup-deno
       - run: deno task check
       - name: Compile offline sidecar
         working-directory: .
@@ -59,9 +57,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@stable
-      - uses: denoland/setup-deno@v2
-        with:
-          deno-version: v2.x
+      - uses: ./.github/actions/setup-deno
       - uses: Swatinem/rust-cache@v2
       - name: Install runtime and build libraries
         run: sudo apt-get update && sudo apt-get install -y libgtk-4-dev libadwaita-1-dev ffmpeg
@@ -73,9 +69,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@stable
-      - uses: denoland/setup-deno@v2
-        with:
-          deno-version: v2.x
+      - uses: ./.github/actions/setup-deno
       - uses: Swatinem/rust-cache@v2
       - name: Install Flatpak build tools
         run: sudo apt-get update && sudo apt-get install -y appstream flatpak flatpak-builder libgtk-4-dev libadwaita-1-dev ffmpeg

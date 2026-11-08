@@ -1,0 +1,49 @@
+name: Set up Deno with download fallback
+description: Install a fixed Deno version with retries and an official mirror fallback.
+inputs:
+  version:
+    description: Exact Deno release version
+    default: v2.9.8
+runs:
+  using: composite
+  steps:
+    - uses: denoland/setup-deno@v2
+      id: setup
+      continue-on-error: true
+      with:
+        deno-version: ${{ inputs.version }}
+    - name: Download Deno from release or official mirror
+      if: steps.setup.outcome == 'failure'
+      shell: bash
+      env:
+        DENO_VERSION: ${{ inputs.version }}
+      run: |
+        set -euo pipefail
+        [[ "$DENO_VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]
+        case "$(uname -m)" in
+          x86_64) arch=x86_64 ;;
+          aarch64) arch=aarch64 ;;
+          *) echo "Unsupported architecture" >&2; exit 1 ;;
+        esac
+        archive="deno-$arch-unknown-linux-gnu.zip"
+        install_dir=$(mktemp -d "$RUNNER_TEMP/deno.XXXXXX")
+        for base in \
+          "https://github.com/denoland/deno/releases/download/$DENO_VERSION" \
+          "https://dl.deno.land/release/$DENO_VERSION"; do
+          if curl --fail --location --retry 3 --retry-all-errors \
+              --connect-timeout 15 --max-time 120 \
+              "$base/$archive" --output "$install_dir/deno.zip" \
+              && unzip -tq "$install_dir/deno.zip"; then
+            unzip -oq "$install_dir/deno.zip" deno -d "$install_dir"
+            chmod +x "$install_dir/deno"
+            actual=$("$install_dir/deno" --version | head -n 1)
+            [[ "$actual" == "deno ${DENO_VERSION#v} "* ]]
+            echo "$install_dir" >> "$GITHUB_PATH"
+            exit 0
+          fi
+        done
+        echo "Deno download failed from both official sources" >&2
+        exit 1
+    - name: Verify Deno
+      shell: bash
+      run: deno --version
