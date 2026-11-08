@@ -1432,7 +1432,8 @@ fn wire_actions(state: &AppState) {
     navigation.set_propagation_phase(gtk::PropagationPhase::Capture);
     let s = state.clone();
     navigation.connect_key_pressed(move |_, key, _, modifiers| {
-        if !state_chat_open(&s)
+        if s.stack.visible_child_name().as_deref() != Some("shell")
+            || !state_chat_open(&s)
             || mentions::is_preediting(&s)
             || modifiers.intersects(
                 gdk::ModifierType::SHIFT_MASK
@@ -1451,7 +1452,10 @@ fn wire_actions(state: &AppState) {
         }
         glib::Propagation::Stop
     });
-    state.conversation.add_controller(navigation);
+    // Capture at the window before GtkPaned handles these keys to resize its
+    // divider. A controller on the conversation cannot intercept an ancestor's
+    // key bindings, or keys when focus remains in the sidebar/divider.
+    state.window.add_controller(navigation);
 
     let s = state.clone();
     state.jump_banner_btn.connect_clicked(move |_| {
