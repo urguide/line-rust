@@ -287,7 +287,10 @@ Deno.test("101 errors identify the failing stage without retrying publication", 
       Error,
       `notes_api_101 (v57/${stage})`,
     );
-    assertEquals(error.message, `notes_api_101 (v57/${stage})`);
+    assertEquals(
+      error.message,
+      `notes_api_101 (v57/${stage}): private server payload`,
+    );
     assertEquals(calls.length, count);
   }
 });
@@ -314,6 +317,71 @@ Deno.test("notes API errors never become empty lists or successful writes and ar
     "invalid_note_identifier",
   );
   assertEquals(invalid.calls.length, 0);
+});
+
+Deno.test("note errors retain server reasons but redact credentials IDs URLs and submitted text", async () => {
+  const mid = `u${"a".repeat(32)}`;
+  const { c, calls } = fake([{
+    code: 101,
+    message:
+      `Invalid readPermission for ${mid}; token=short-secret https://example.com/private?q=secret`,
+    reason: "Rejected text: my private draft; channel-value",
+    error: { message: "Missing field: homeId" },
+    result: { authToken: "never show this object" },
+  }]);
+  c.base.timeline.timelineHeaders = { "x-line-channeltoken": "channel-value" };
+  const error = await assertRejects(
+    () =>
+      notesRpc(c, "create", {
+        chatMid: "cgroup",
+        text: "my private draft",
+      }),
+    Error,
+    "notes_api_101 (v57/post/create)",
+  );
+  for (
+    const secret of [
+      mid,
+      "short-secret",
+      "https://",
+      "my private draft",
+      "channel-value",
+      "never show this object",
+    ]
+  ) {
+    assertEquals(error.message.includes(secret), false);
+  }
+  assertEquals(error.message.includes("Invalid readPermission"), true);
+  assertEquals(error.message.includes("Missing field: homeId"), true);
+  assertEquals(calls.length, 1);
+});
+
+Deno.test("HTTP JSON errors retain a reason while HTML errors are not displayed", async () => {
+  for (const json of [true, false]) {
+    const { c } = fake([]);
+    Object.assign(c.base, {
+      fetch: (() =>
+        Promise.resolve(
+          json
+            ? Response.json({ message: "Invalid request body" }, {
+              status: 400,
+            })
+            : new Response("<html>private gateway data</html>", {
+              status: 502,
+            }),
+        )) as typeof c.base.fetch,
+    });
+    const error = await assertRejects(
+      () => notesRpc(c, "create", { chatMid: "cgroup", text: "hello" }),
+      Error,
+    );
+    assertEquals(
+      error.message,
+      json
+        ? "notes_http_400 (v57/post/create): Invalid request body"
+        : "notes_http_502 (v57/post/create)",
+    );
+  }
 });
 
 Deno.test("a failed comments request still returns the note and reports the partial failure", async () => {

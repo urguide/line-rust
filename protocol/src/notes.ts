@@ -14,6 +14,43 @@ function identifier(value: unknown): string {
   return value;
 }
 
+/** Keep diagnostic text, never stringify response bodies or request headers. */
+function errorDetail(envelope: Json, privateValues: unknown[]): string {
+  const detail = [
+    envelope.message,
+    envelope.reason,
+    envelope.errorMessage,
+    object(envelope.error).message,
+    object(envelope.error).reason,
+  ]
+    .filter((value): value is string =>
+      typeof value === "string" && !!value.trim()
+    );
+  const secrets = privateValues.filter((v): v is string =>
+    typeof v === "string" && !!v
+  )
+    .sort((a, b) => b.length - a.length);
+  const parts = [...new Set(detail)].slice(0, 3).map((value) => {
+    let text = value;
+    for (const secret of secrets) text = text.split(secret).join("[redacted]");
+    // Strip control characters before displaying server text in GTK/logs.
+    text = Array.from(
+      text,
+      (c) => c.charCodeAt(0) < 32 || c.charCodeAt(0) === 127 ? " " : c,
+    ).join("");
+    return text
+      .replace(/https?:\/\/[^\s<>"']+/gi, "[url]")
+      .replace(/\b[ucgr][a-f0-9]{32}\b/gi, "[mid]")
+      .replace(
+        /\b(?:bearer\s+|(?:[\w-]*token|authorization|x-line-access|x-line-channeltoken|password|secret)\s*[=:]\s*)[^\s,;]+/gi,
+        "[credential]",
+      )
+      .replace(/\b[A-Za-z0-9_+/=-]{40,}\b/g, "[opaque]")
+      .replace(/\s+/g, " ").trim().slice(0, 240);
+  });
+  return parts.filter(Boolean).join("; ");
+}
+
 /** Note detail responses can wrap the post inside a feed. */
 function postObject(value: unknown): Json {
   let row = object(value);
@@ -72,14 +109,38 @@ export async function notesRpc(
         body: body === undefined ? undefined : JSON.stringify(body),
       },
     );
-    if (!response.ok) {
-      throw new Error(`notes_http_${response.status} (${path})`);
-    }
-    const envelope = object(await response.json());
-    if (envelope.code !== 0) {
-      // Do not leak server payloads, channel tokens or authentication headers.
+    let envelope: Json;
+    try {
+      envelope = object(await response.json());
+    } catch {
       throw new Error(
-        `notes_api_${String(envelope.code ?? "invalid_response")} (${path})`,
+        response.ok
+          ? `notes_invalid_response (${path}: non-JSON response)`
+          : `notes_http_${response.status} (${path})`,
+      );
+    }
+    if (!response.ok || envelope.code !== 0) {
+      const detail = errorDetail(envelope, [
+        c.authToken,
+        c.base.profile?.mid,
+        chat,
+        ...Object.values(params),
+        p.text,
+        p.postId,
+        p.objectId,
+        ...Object.entries(timeline.timelineHeaders)
+          .filter(([key]) => /token|access|authorization|cookie/i.test(key))
+          .map(([, value]) => value),
+      ]);
+      const code = typeof envelope.code === "number" ||
+          (typeof envelope.code === "string" && /^\d+$/.test(envelope.code))
+        ? String(envelope.code)
+        : "invalid_response";
+      const prefix = response.ok
+        ? `notes_api_${code}`
+        : `notes_http_${response.status}`;
+      throw new Error(
+        `${prefix} (${path})${detail ? `: ${detail}` : ""}`,
       );
     }
     if (!("result" in envelope)) throw new Error("notes_invalid_response");
