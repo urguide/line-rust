@@ -31,6 +31,71 @@ function fake(responses: unknown[], account = "ume") {
 }
 const ok = (result: unknown) => ({ code: 0, result });
 
+Deno.test("detail feed wrappers are unwrapped for viewing and ownership checks", async () => {
+  const post = {
+    postInfo: { postId: "123" },
+    writerInfo: { writerMid: "ume" },
+    contents: { text: "hello" },
+  };
+  for (const wrapped of [post, { post }, { feed: { post } }]) {
+    const { c } = fake([ok(wrapped), ok({ comments: [] })]);
+    assertEquals(
+      await notesRpc(c, "get", { chatMid: "cgroup", postId: "123" }),
+      {
+        post,
+        comments: { comments: [] },
+        commentsError: false,
+      },
+    );
+    const edit = fake([ok(wrapped), ok({})]);
+    await notesRpc(edit.c, "update", {
+      chatMid: "cgroup",
+      postId: "123",
+      text: "new",
+    });
+    assertEquals(edit.calls.length, 2);
+  }
+  const wrong = fake([ok({ feed: { post } })]);
+  await assertRejects(
+    () => notesRpc(wrong.c, "get", { chatMid: "cgroup", postId: "456" }),
+    Error,
+    "ID mismatch",
+  );
+});
+
+Deno.test("OTO 501 rechecks the exact peer once and never repeats creation", async () => {
+  for (const recovered of [true, false]) {
+    const { c, calls } = fake([
+      ok({ updated: [] }),
+      { code: 501 },
+      ok({
+        updated: [{
+          userMid: recovered ? "upeer" : "uother",
+          groupId: "gprivate",
+        }],
+      }),
+      ok({}),
+    ]);
+    const create = () =>
+      notesRpc(c, "create", { chatMid: "upeer", text: "hello" });
+    if (recovered) {
+      await create();
+      assertEquals(calls[3].query.homeId, "gprivate");
+    } else {
+      await assertRejects(
+        create,
+        Error,
+        "notes_api_501 (v57/otoaccount/create)",
+      );
+      assertEquals(calls.length, 3);
+    }
+    assertEquals(
+      calls.filter((c) => c.path.endsWith("otoaccount/create.json")).length,
+      1,
+    );
+  }
+});
+
 Deno.test("notes resolves private OTO instead of reading the peer public home", async () => {
   const { c, calls } = fake([
     ok({ updated: [{ userMid: "upeer", groupId: "gprivate" }] }),
@@ -236,7 +301,10 @@ Deno.test("note download validates membership in the requested post before fetch
   const root = await Deno.makeTempDir();
   try {
     const post = {
-      post: { contents: { media: [{ objectId: "photo123", type: "PHOTO" }] } },
+      post: {
+        postInfo: { postId: "123" },
+        contents: { media: [{ objectId: "photo123", type: "PHOTO" }] },
+      },
     };
     const { c } = fake([ok(post), ok(post)]);
     let downloads = 0;

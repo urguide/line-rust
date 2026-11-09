@@ -14,6 +14,27 @@ function identifier(value: unknown): string {
   return value;
 }
 
+/** Note detail responses can wrap the post inside a feed. */
+function postObject(value: unknown): Json {
+  let row = object(value);
+  const shapes: string[] = [];
+  for (let depth = 0; depth < 4; depth++) {
+    shapes.push(
+      Object.keys(row).filter((k) => /^[a-zA-Z][a-zA-Z0-9_]{0,39}$/.test(k))
+        .slice(0, 16).join(","),
+    );
+    if (object(row.postInfo).postId != null) return row;
+    const nested = row.post ?? row.feed;
+    if (!nested || typeof nested !== "object") break;
+    row = object(nested);
+  }
+  throw new Error(
+    `notes_invalid_post (post/get: missing postInfo.postId; fields=${
+      shapes.join(" > ")
+    })`,
+  );
+}
+
 export async function notesRpc(
   c: Client,
   action: string,
@@ -75,10 +96,35 @@ export async function notesRpc(
       // OTO creation carries the participants in both query and JSON body,
       // matching the Notes endpoint's request shape (CHRLINE createOtoAccount).
       const participants = { userMid: own, friendMid: chat };
-      const created = object(
-        await request("v57/otoaccount/create", participants, participants),
-      );
-      home = identifier(created.groupId);
+      try {
+        const created = object(
+          await request("v57/otoaccount/create", participants, participants),
+        );
+        home = identifier(created.groupId);
+      } catch (error) {
+        // A rejected creation may race an already-created OTO home. Re-read
+        // the mapping once; never retry the write or publish to a public MID.
+        if (
+          !(error instanceof Error) ||
+          !error.message.startsWith("notes_api_501 ")
+        ) throw error;
+        let recovered: unknown;
+        try {
+          const refreshed = object(
+            await request("v57/otoaccount/sync", { userMid: own }),
+          );
+          recovered = Array.isArray(refreshed.updated)
+            ? refreshed.updated.map(object).find((item) =>
+              item.userMid === chat
+            )?.groupId
+            : undefined;
+        } catch { /* Preserve the original creation error. */ }
+        if (
+          typeof recovered !== "string" ||
+          !/^[a-zA-Z0-9_-]{1,200}$/.test(recovered) || recovered.startsWith("u")
+        ) throw error;
+        home = recovered;
+      }
     } else if (action === "list") {
       return { feeds: [] };
     } else {
@@ -162,7 +208,7 @@ export async function notesRpc(
   if (action === "media") {
     if (!transfer) throw new Error("notes_transfer_missing");
     const result = object(await request("v57/post/get", { ...params, postId }));
-    const contents = object(object(result.post ?? result).contents);
+    const contents = object(postObject(result).contents);
     const media = Array.isArray(contents.media)
       ? contents.media.map(object)
       : [];
@@ -196,7 +242,12 @@ export async function notesRpc(
     return { path, type: item.type, mime: blob.type };
   }
   if (action === "get") {
-    const post = await request("v57/post/get", { ...params, postId });
+    const post = postObject(
+      await request("v57/post/get", { ...params, postId }),
+    );
+    if (String(object(post.postInfo).postId) !== postId) {
+      throw new Error("notes_invalid_post (post/get: ID mismatch)");
+    }
     // A comment permission/network failure must not hide the post itself.
     let comments: unknown = null;
     let commentsError = false;
@@ -238,7 +289,7 @@ export async function notesRpc(
   }
   if (action === "update" || action === "delete") {
     const result = object(await request("v57/post/get", { ...params, postId }));
-    const post = object(result.post ?? result);
+    const post = postObject(result);
     const writer = object(post.writerInfo);
     const info = object(post.postInfo);
     if ((writer.writerMid ?? writer.mid) !== c.base.profile?.mid) {
