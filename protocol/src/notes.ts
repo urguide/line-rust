@@ -42,12 +42,14 @@ export async function notesRpc(
         body: body === undefined ? undefined : JSON.stringify(body),
       },
     );
-    if (!response.ok) throw new Error(`notes_http_${response.status}`);
+    if (!response.ok) {
+      throw new Error(`notes_http_${response.status} (${path})`);
+    }
     const envelope = object(await response.json());
     if (envelope.code !== 0) {
       // Do not leak server payloads, channel tokens or authentication headers.
       throw new Error(
-        `notes_api_${String(envelope.code ?? "invalid_response")}`,
+        `notes_api_${String(envelope.code ?? "invalid_response")} (${path})`,
       );
     }
     if (!("result" in envelope)) throw new Error("notes_invalid_response");
@@ -139,7 +141,21 @@ export async function notesRpc(
     }
     return await request("v57/post/create", params, {
       postInfo: { readPermission: { type: "GROUP", gids: [home] } },
-      contents: { text: content, stickers: [], locations: [], media },
+      contents: {
+        contentsStyle: {
+          textStyle: {
+            textSizeMode: "NORMAL",
+            backgroundColor: "#FFFFFF",
+            textAnimation: "NONE",
+          },
+          mediaStyle: { displayType: "GRID_1_A" },
+        },
+        text: content,
+        textMeta: [],
+        stickers: [],
+        locations: [],
+        media,
+      },
     });
   }
   const postId = identifier(p.postId);

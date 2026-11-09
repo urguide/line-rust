@@ -101,6 +101,58 @@ Deno.test("editing preserves server attachments and permissions and rejects othe
   assertEquals(other.calls.length, 1);
 });
 
+Deno.test("text note creation includes LINE content styles and keeps the private home", async () => {
+  for (const chatMid of ["cgroup", "upeer"]) {
+    const home = chatMid === "upeer" ? "gprivate" : chatMid;
+    const responses = chatMid === "upeer"
+      ? [ok({ updated: [{ userMid: chatMid, groupId: home }] }), ok({})]
+      : [ok({})];
+    const { c, calls } = fake(responses);
+    await notesRpc(c, "create", { chatMid, text: "筆記\n第二行" });
+    const sent = calls.at(-1)!;
+    assertEquals(sent.path, "/ext/note/nt/api/v57/post/create.json");
+    assertEquals(sent.query, { homeId: home, sourceType: "TALKROOM" });
+    assertEquals(sent.body, {
+      postInfo: { readPermission: { type: "GROUP", gids: [home] } },
+      contents: {
+        contentsStyle: {
+          textStyle: {
+            textSizeMode: "NORMAL",
+            backgroundColor: "#FFFFFF",
+            textAnimation: "NONE",
+          },
+          mediaStyle: { displayType: "GRID_1_A" },
+        },
+        text: "筆記\n第二行",
+        textMeta: [],
+        stickers: [],
+        locations: [],
+        media: [],
+      },
+    });
+  }
+});
+
+Deno.test("101 errors identify the failing stage without retrying publication", async () => {
+  const rejected = { code: 101, message: "private server payload" };
+  for (
+    const [chatMid, responses, stage, count] of [
+      ["cgroup", [rejected], "post/create", 1],
+      ["upeer", [rejected], "otoaccount/sync", 1],
+      ["upeer", [ok({ updated: [] }), rejected], "otoaccount/create", 2],
+    ] as const
+  ) {
+    const { c, calls } = fake([...responses]);
+    const error = await assertRejects(
+      () => notesRpc(c, "create", { chatMid, text: "hello" }),
+      Error,
+      `notes_api_101 (v57/${stage})`,
+    );
+    assertEquals(error.message, `notes_api_101 (v57/${stage})`);
+    assertEquals(calls.length, count);
+  }
+});
+
 Deno.test("notes API errors never become empty lists or successful writes and are not retried", async () => {
   for (const action of ["list", "create", "like", "comment"]) {
     const { c, calls } = fake([{ code: 403, message: "secret response" }]);
