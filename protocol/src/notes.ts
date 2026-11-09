@@ -17,13 +17,22 @@ function identifier(value: unknown): string {
 /** Note detail responses can wrap the post inside a feed. */
 function postObject(value: unknown): Json {
   let row = object(value);
+  let inheritedWriter: Json = {};
   const shapes: string[] = [];
   for (let depth = 0; depth < 4; depth++) {
     shapes.push(
       Object.keys(row).filter((k) => /^[a-zA-Z][a-zA-Z0-9_]{0,39}$/.test(k))
         .slice(0, 16).join(","),
     );
-    if (object(row.postInfo).postId != null) return row;
+    const writer = object(row.writerInfo);
+    if (writer.writerMid || writer.mid) inheritedWriter = writer;
+    if (object(row.postInfo).postId != null) {
+      // The feed envelope may own writerInfo while its post owns contents.
+      // Keep the nearest explicit author; never infer ownership from homeId.
+      return Object.keys(inheritedWriter).length
+        ? { ...row, writerInfo: inheritedWriter }
+        : row;
+    }
     const nested = row.post ?? row.feed;
     if (!nested || typeof nested !== "object") break;
     row = object(nested);
@@ -153,7 +162,14 @@ export async function notesRpc(
       }
       query.updatedTime = String(cursor.updatedTime);
     }
-    return await request("v57/post/list", query);
+    const result = object(await request("v57/post/list", query));
+    if (Array.isArray(result.feeds)) {
+      return { ...result, feeds: result.feeds.map(postObject) };
+    }
+    if (Array.isArray(result.posts)) {
+      return { ...result, posts: result.posts.map(postObject) };
+    }
+    return result;
   }
   if (action === "create") {
     const content = typeof p.text === "string" ? p.text : "";
@@ -292,7 +308,8 @@ export async function notesRpc(
     const post = postObject(result);
     const writer = object(post.writerInfo);
     const info = object(post.postInfo);
-    if ((writer.writerMid ?? writer.mid) !== c.base.profile?.mid) {
+    const author = writer.writerMid || writer.mid;
+    if (!author || !c.base.profile?.mid || author !== c.base.profile.mid) {
       throw new Error("notes_not_owner");
     }
     if (String(info.postId) !== postId) throw new Error("notes_invalid_post");
@@ -305,7 +322,13 @@ export async function notesRpc(
       throw new Error("notes_invalid_post");
     }
     return await request("v57/post/update", params, {
-      postInfo: { ...info, editableContents: ["ALL"] },
+      postInfo: {
+        postId,
+        editableContents: ["ALL"],
+        ...(info.readPermission !== undefined
+          ? { readPermission: info.readPermission }
+          : {}),
+      },
       contents: { ...object(post.contents), text: text(), textMeta: [] },
     });
   }

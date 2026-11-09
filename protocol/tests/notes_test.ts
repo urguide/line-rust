@@ -31,6 +31,75 @@ function fake(responses: unknown[], account = "ume") {
 }
 const ok = (result: unknown) => ({ code: 0, result });
 
+Deno.test("feed author survives list/detail unwrapping and enables only the author's edits", async () => {
+  const post = {
+    postInfo: {
+      postId: "123",
+      likeCount: 9,
+      commentCount: 4,
+      createdTime: 42,
+      readPermission: { type: "GROUP", gids: ["gprivate"] },
+    },
+    contents: { text: "old", media: [{ objectId: "photo" }], textMeta: [] },
+  };
+  const writerInfo = { writerMid: "ume", writerName: "Me" };
+  const feed = { writerInfo, post };
+  const listing = fake([ok({ feeds: [feed] })]);
+  assertEquals(await notesRpc(listing.c, "list", { chatMid: "cgroup" }), {
+    feeds: [{ ...post, writerInfo }],
+  });
+  const detail = fake([ok({ feed }), ok({ comments: [] })]);
+  const result = await notesRpc(detail.c, "get", {
+    chatMid: "cgroup",
+    postId: "123",
+  }) as { post: { writerInfo: unknown } };
+  assertEquals(result.post.writerInfo, writerInfo);
+  const edit = fake([ok({ feed }), ok({})]);
+  await notesRpc(edit.c, "update", {
+    chatMid: "cgroup",
+    postId: "123",
+    text: "new",
+  });
+  assertEquals(edit.calls[1].body, {
+    postInfo: {
+      postId: "123",
+      editableContents: ["ALL"],
+      readPermission: post.postInfo.readPermission,
+    },
+    contents: { ...post.contents, text: "new" },
+  });
+  const other = fake([
+    ok({
+      feed: {
+        writerInfo,
+        post: { ...post, writerInfo: { writerMid: "uother" } },
+      },
+    }),
+  ]);
+  await assertRejects(
+    () =>
+      notesRpc(other.c, "update", {
+        chatMid: "cgroup",
+        postId: "123",
+        text: "new",
+      }),
+    Error,
+    "notes_not_owner",
+  );
+  assertEquals(other.calls.length, 1);
+  const missing = fake([ok({ post })]);
+  await assertRejects(
+    () =>
+      notesRpc(missing.c, "update", {
+        chatMid: "cgroup",
+        postId: "123",
+        text: "new",
+      }),
+    Error,
+    "notes_not_owner",
+  );
+});
+
 Deno.test("detail feed wrappers are unwrapped for viewing and ownership checks", async () => {
   const post = {
     postInfo: { postId: "123" },
