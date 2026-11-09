@@ -72,11 +72,11 @@ export async function notesRpc(
     if (match) {
       home = identifier(match.groupId);
     } else if (action === "create") {
+      // OTO creation carries the participants in both query and JSON body,
+      // matching the Notes endpoint's request shape (CHRLINE createOtoAccount).
+      const participants = { userMid: own, friendMid: chat };
       const created = object(
-        await request("v57/otoaccount/create", {}, {
-          userMid: own,
-          friendMid: chat,
-        }),
+        await request("v57/otoaccount/create", participants, participants),
       );
       home = identifier(created.groupId);
     } else if (action === "list") {

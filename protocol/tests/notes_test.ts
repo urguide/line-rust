@@ -63,6 +63,11 @@ Deno.test("opening an absent OTO notebook is read-only; creating resolves the pr
     ok({}),
   ]);
   await notesRpc(create.c, "create", { chatMid: "upeer", text: "hello" });
+  assertEquals(
+    create.calls[1].path,
+    "/ext/note/nt/api/v57/otoaccount/create.json",
+  );
+  assertEquals(create.calls[1].query, { userMid: "ume", friendMid: "upeer" });
   assertEquals(create.calls[1].body, { userMid: "ume", friendMid: "upeer" });
   assertEquals(create.calls[2].query.homeId, "gprivate");
   assertEquals((create.calls[2].body as { postInfo: unknown }).postInfo, {
