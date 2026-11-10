@@ -527,7 +527,7 @@ pub(super) fn append_message(state: &AppState, msg: &MessageInfo, live: bool) {
         }
         let read = count.is_some_and(|n| n > 0);
         let status = gtk::Label::builder()
-            .label(format_outgoing_status(count, msg.created_time))
+            .label(format_outgoing_status(&chat, count, msg.created_time))
             .halign(gtk::Align::End)
             .valign(gtk::Align::End)
             .xalign(1.0)
@@ -897,10 +897,18 @@ pub(super) fn apply_message_unsent(state: &AppState, chat_mid: &str, message_id:
     *state.msg_list_fp.borrow_mut() = None;
 }
 
-pub(super) fn format_outgoing_status(count: Option<u64>, created_ms: i64) -> String {
+pub(super) fn format_outgoing_status(
+    chat_mid: &str,
+    count: Option<u64>,
+    created_ms: i64,
+) -> String {
     let t = format_msg_time(created_ms);
     if let Some(count) = count.filter(|n| *n > 0) {
-        let read = crate::i18n::tf("status_read_count", &[("n", &count.to_string())]);
+        let read = if chat_mid.starts_with(['c', 'r']) {
+            crate::i18n::tf("status_read_count", &[("n", &count.to_string())])
+        } else {
+            crate::i18n::t("status_read")
+        };
         if t.is_empty() {
             read
         } else {
@@ -2248,19 +2256,29 @@ mod receipt_tests {
     fn outgoing_read_count_is_above_time_and_unread_shows_only_time() {
         let timestamp = 1_800_000_000_000;
         let time = format_msg_time(timestamp);
-        assert_eq!(format_outgoing_status(None, timestamp), time);
-        assert_eq!(format_outgoing_status(Some(0), timestamp), time);
-        for count in [1, 3] {
-            let read = crate::i18n::tf("status_read_count", &[("n", &count.to_string())]);
-            assert_eq!(
-                format_outgoing_status(Some(count), timestamp),
-                format!("{read}\n{time}")
-            );
+        for chat in ["u1", "c1", "r1"] {
+            assert_eq!(format_outgoing_status(chat, None, timestamp), time);
+            assert_eq!(format_outgoing_status(chat, Some(0), timestamp), time);
+            for count in [1, 3] {
+                let read = if chat == "u1" {
+                    crate::i18n::t("status_read")
+                } else {
+                    crate::i18n::tf("status_read_count", &[("n", &count.to_string())])
+                };
+                assert_eq!(
+                    format_outgoing_status(chat, Some(count), timestamp),
+                    format!("{read}\n{time}")
+                );
+            }
         }
         assert_eq!(
-            format_outgoing_status(Some(3), 0),
+            format_outgoing_status("c1", Some(3), 0),
             crate::i18n::tf("status_read_count", &[("n", "3")])
         );
-        assert_eq!(format_outgoing_status(None, 0), "");
+        assert_eq!(
+            format_outgoing_status("u1", Some(1), 0),
+            crate::i18n::t("status_read")
+        );
+        assert_eq!(format_outgoing_status("u1", None, 0), "");
     }
 }

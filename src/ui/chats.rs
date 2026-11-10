@@ -968,7 +968,7 @@ pub(super) fn apply_read_counts(state: &AppState, chat_mid: &str, counts: HashMa
     for (id, label) in state.receipt_slots.borrow().iter() {
         if let Some(count) = current.get(id).filter(|n| **n > 0) {
             let ts = times.get(id).copied().unwrap_or(0);
-            label.set_text(&format_outgoing_status(Some(*count), ts));
+            label.set_text(&format_outgoing_status(chat_mid, Some(*count), ts));
             label.set_tooltip_text(Some(&crate::i18n::t("status_read")));
             label.add_css_class("line-msg-status-read");
         }
