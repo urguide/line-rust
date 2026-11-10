@@ -61,6 +61,18 @@ pub fn id(row: &Value) -> &str {
     row.get("id").and_then(Value::as_str).unwrap_or_default()
 }
 
+fn set_chat_preview(row: &mut Value, message: &Value) {
+    row["preview"] = json!(crate::message::preview(
+        message["contentType"].as_str().unwrap_or_default(),
+        message["text"].as_str().unwrap_or_default(),
+    ));
+    row["previewMessageId"] = message["id"].clone();
+    row["previewTime"] = message["createdTime"].clone();
+    if message["createdTime"].as_i64().unwrap_or(0) > row["lastActivity"].as_i64().unwrap_or(0) {
+        row["lastActivity"] = message["createdTime"].clone();
+    }
+}
+
 pub fn merge(old: Value, incoming: &Value) -> Value {
     let mut merged = old.as_object().cloned().unwrap_or_default();
     if let Some(fields) = incoming.as_object() {
@@ -378,6 +390,55 @@ impl Store {
         self.ttl_ms = crate::cache_policy::CachePolicy::for_mode(mode).disk_messages;
     }
 
+    /// Update only preview fields; background reconciliation is not a catalog refresh.
+    pub fn save_chat_preview(&self, chat: &str, message: &Value) -> Result<()> {
+        let body: Option<String> = self
+            .db
+            .query_row(
+                "SELECT body FROM catalogs WHERE account=?1 AND kind='list_chats'",
+                params![self.account],
+                |r| r.get(0),
+            )
+            .optional()?;
+        let Some(body) = body else { return Ok(()) };
+        let mut value: Value = serde_json::from_str(&body)?;
+        if let Some(row) = value["chats"]
+            .as_array_mut()
+            .into_iter()
+            .flatten()
+            .find(|r| r["mid"] == chat)
+        {
+            if message["createdTime"].as_i64().unwrap_or(0)
+                < row["previewTime"].as_i64().unwrap_or(0)
+            {
+                return Ok(());
+            }
+            set_chat_preview(row, message);
+            self.db.execute(
+                "UPDATE catalogs SET body=?1 WHERE account=?2 AND kind='list_chats'",
+                params![value.to_string(), self.account],
+            )?;
+        }
+        Ok(())
+    }
+
+    pub fn message_withdrawn(&self, message: &str) -> Result<bool> {
+        Ok(self.db.query_row(
+            "SELECT EXISTS(SELECT 1 FROM tombstones WHERE account=?1 AND id=?2)",
+            params![self.account, message],
+            |r| r.get(0),
+        )?)
+    }
+
+    pub fn latest_message(&self, chat: &str) -> Result<Option<Value>> {
+        let body: Option<String> = self.db.query_row(
+            "SELECT body FROM messages WHERE account=?1 AND chat=?2 ORDER BY created DESC,LENGTH(id) DESC,id DESC LIMIT 1",
+            params![self.account, chat], |r| r.get(0),
+        ).optional()?;
+        body.map(|body| serde_json::from_str(&body).map_err(Into::into))
+            .transpose()
+    }
+
     pub fn decorate_chats(&self, value: &mut Value) -> Result<()> {
         if let Some(rows) = value["chats"].as_array_mut() {
             for row in rows {
@@ -385,14 +446,10 @@ impl Store {
                 let latest:Option<String>=self.db.query_row("SELECT body FROM messages WHERE account=?1 AND chat=?2 ORDER BY created DESC,LENGTH(id) DESC,id DESC LIMIT 1",params![self.account,mid],|r|r.get(0)).optional()?;
                 if let Some(latest) = latest {
                     let message: Value = serde_json::from_str(&latest)?;
-                    row["preview"] = json!(crate::message::preview(
-                        message["contentType"].as_str().unwrap_or_default(),
-                        message["text"].as_str().unwrap_or_default(),
-                    ));
                     if message["createdTime"].as_i64().unwrap_or(0)
-                        > row["lastActivity"].as_i64().unwrap_or(0)
+                        >= row["previewTime"].as_i64().unwrap_or(0)
                     {
-                        row["lastActivity"] = message["createdTime"].clone();
+                        set_chat_preview(row, &message);
                     }
                 }
             }

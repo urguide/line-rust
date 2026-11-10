@@ -305,6 +305,16 @@ pub(super) fn handle_event(state: &AppState, ev: ProtocolEvent) {
             last_activity,
         } => {
             let preview = localize_preview(&preview);
+            if state
+                .chats
+                .borrow()
+                .iter()
+                .any(|chat| chat.mid == mid && chat.last_activity > last_activity)
+            {
+                return;
+            }
+            // A sidebar-only snapshot is not a complete history page.
+            state.message_cache.borrow_mut().remove(&mid);
             if let Some(label) = state.chat_previews.borrow().get(&mid) {
                 label.set_text(&preview);
             }
@@ -314,6 +324,7 @@ pub(super) fn handle_event(state: &AppState, ev: ProtocolEvent) {
                     chat.last_activity = last_activity;
                 }
             }
+            chats::reposition_chat(state, &mid);
         }
         ProtocolEvent::MessageUnsent {
             chat_mid,

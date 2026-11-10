@@ -149,6 +149,14 @@ explicit **Save** still writes the requested file.
 | Month | 60 min | 120 min | 360 min | 30 days | 30 days | 30 days |
 | Forever | 120 min | 360 min | 360 min | 7 days | Unlimited | Unlimited |
 
+Sidebar previews also reconcile in the background: live events update immediately,
+and a message-box snapshot checks for missed changes every five minutes. Only
+changed known chats fetch one latest message, with one request in flight and a
+two-second pause between requests. Preview repair downloads no attachments and
+does not mark messages read. Its catalog-only snapshots never advance history
+heads or pagination cursors; stale latest pages expire so opening a chat still
+fetches its full page and repairs gaps back to the previous history checkpoint.
+
 Freshness expiry triggers a refresh; disk retention controls how long saved
 history and stale list fallbacks remain usable. Invalidating freshness does not
 reset a catalog's disk age. SQLite upgrades preserve existing catalog rows.

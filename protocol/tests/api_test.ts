@@ -5,6 +5,43 @@ import { packRaw, unpackRaw, wireLine } from "../src/raw_codec.ts";
 import { coerceI64 } from "../src/messages.ts";
 import { unsendFromOperation } from "../src/events.ts";
 
+Deno.test("sidebar preview uses the supplied cursor and requests only one message", async () => {
+  let calls = 0;
+  const raw = { id: "160", createdTime: "160", text: "latest" };
+  const client = {
+    base: {
+      talk: {
+        getPreviousMessagesV2WithRequest: (
+          p: { request: Record<string, unknown> },
+        ) => {
+          calls++;
+          assertEquals(p.request.messageBoxId, "chat");
+          assertEquals(p.request.messagesCount, 1);
+          assertEquals(
+            String(
+              (p.request.endMessageId as { messageId: unknown }).messageId,
+            ),
+            "160",
+          );
+          return Promise.resolve([raw]);
+        },
+      },
+    },
+  } as unknown as Client;
+  const api = createApi(
+    () => client,
+    "/unused",
+    () => Promise.resolve({ raw } as unknown as TalkMessage),
+  );
+  const result = await api("bridge_chat_preview", {
+    chatMid: "chat",
+    cursor: { messageId: "160", deliveredTime: "160" },
+  }) as { messages: unknown[]; hasMore: boolean };
+  assertEquals(calls, 1);
+  assertEquals(result.messages.length, 1);
+  assertEquals(result.hasMore, false);
+});
+
 Deno.test("mention members request only current chat participants and metadata survives send", async () => {
   const metadata = { MENTION: '{"MENTIONEES":[{"S":"3","E":"10","M":"u1"}]}' };
   const client = {

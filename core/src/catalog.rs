@@ -155,6 +155,10 @@ pub fn load(
                     row["lastActivity"] =
                         json!(integer(&box_["lastDeliveredMessageId"]["deliveredTime"]));
                     row["unread"] = json!(integer(&box_["unreadCount"]));
+                    row["lastMessage"] = json!({
+                        "messageId":string(&box_["lastDeliveredMessageId"]["messageId"]),
+                        "deliveredTime":string(&box_["lastDeliveredMessageId"]["deliveredTime"]),
+                    });
                 }
             }
             Err(_) => degraded = true,

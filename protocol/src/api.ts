@@ -70,14 +70,16 @@ export function createApi(
         return await sendReaction(c, p);
       case "bridge_reactions":
         return await reactionSnapshots(c, p);
+      case "bridge_chat_preview":
       case "bridge_fetch_page": {
+        const preview = method === "bridge_chat_preview";
         const reactionsAt = Date.now();
         const signal = fetches.get(String(p.fetchToken))?.signal;
         signal?.throwIfAborted();
-        let end = p.before as
+        let end = (preview ? p.cursor : p.before) as
           | { messageId: string; deliveredTime: string }
           | null;
-        if (!end) {
+        if (!end && !preview) {
           const boxes = await c.base.talk.getMessageBoxes({
             messageBoxListRequest: {},
           });
@@ -99,7 +101,7 @@ export function createApi(
               messageId: coerceI64(end.messageId),
               deliveredTime: coerceI64(end.deliveredTime),
             },
-            messagesCount: 20,
+            messagesCount: preview ? 1 : 20,
             withReadCount: true,
           },
         });
@@ -107,7 +109,9 @@ export function createApi(
         const messages = [];
         for (const message of raw) {
           signal?.throwIfAborted();
-          if (p.before && String(message.id) === end.messageId) continue;
+          if (!preview && p.before && String(message.id) === end.messageId) {
+            continue;
+          }
           // Snapshot before decoding: linejs may mutate metadata/chunks before
           // throwing. Keep the original available for later key recovery.
           const rawMessage = packRaw(message);

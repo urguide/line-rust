@@ -336,6 +336,15 @@ pub(super) fn wire_chat_context_menu(state: &AppState) {
 }
 
 pub(super) fn apply_chats(state: &AppState, mut chats: Vec<ChatInfo>, cached: bool) {
+    // Catalog requests can finish after a live event / preview repair.
+    for chat in &mut chats {
+        if let Some(current) = state.chats.borrow().iter().find(|c| c.mid == chat.mid)
+            && current.last_activity > chat.last_activity
+        {
+            chat.preview = current.preview.clone();
+            chat.last_activity = current.last_activity;
+        }
+    }
     let pinned = pinned_chats(state);
     sort_chats(&mut chats, &pinned);
     clear_list(&state.chat_list);
@@ -514,6 +523,37 @@ pub(super) fn upsert_chat_row(state: &AppState, chat: ChatInfo) {
         &[("n", &n.to_string())],
     ));
     refresh_tray_menu(state);
+}
+
+pub(super) fn reposition_chat(state: &AppState, mid: &str) {
+    let pinned = pinned_chats(state);
+    let (old, new) = {
+        let mut chats = state.chats.borrow_mut();
+        let Some(old) = chats.iter().position(|c| c.mid == mid) else {
+            return;
+        };
+        let chat = chats.remove(old);
+        let key = (!pinned.contains(mid), std::cmp::Reverse(chat.last_activity));
+        let new = chats
+            .iter()
+            .position(|c| (!pinned.contains(&c.mid), std::cmp::Reverse(c.last_activity)) > key)
+            .unwrap_or(chats.len());
+        chats.insert(new, chat);
+        (old, new)
+    };
+    if old != new
+        && let Some(row) = state.chat_list.row_at_index(old as i32)
+    {
+        let selected = row.is_selected();
+        let visible = row.is_visible();
+        state.chat_list.remove(&row);
+        state.chat_list.insert(&row, new as i32);
+        row.set_visible(visible);
+        if selected {
+            state.chat_list.select_row(Some(&row));
+        }
+        refresh_pinned_divider(state);
+    }
 }
 
 pub(super) fn promote_chat_to_top(state: &AppState, mid: &str) {

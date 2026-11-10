@@ -11,6 +11,7 @@ use std::thread;
 use std::time::{Duration, Instant};
 
 mod expressions;
+mod previews;
 mod receipts;
 mod scheduler;
 
@@ -164,6 +165,7 @@ pub struct Engine<T: Transport> {
     receipts_synced: HashMap<String, Instant>,
     queued_receipts: HashSet<String>,
     scheduler: scheduler::Scheduler,
+    previews: previews::Previews,
 }
 
 impl<T: Transport> Engine<T> {
@@ -196,6 +198,7 @@ impl<T: Transport> Engine<T> {
             receipts_synced: HashMap::new(),
             queued_receipts: HashSet::new(),
             scheduler: scheduler::Scheduler::default(),
+            previews: previews::Previews::default(),
         }
     }
 
@@ -593,6 +596,9 @@ impl<T: Transport> Engine<T> {
                         && !value["partial"].as_bool().unwrap_or(false)
                     {
                         self.store.decorate_chats(&mut value)?;
+                        if method == "list_chats" {
+                            self.enable_previews(&value, generation, false)?;
+                        }
                         return Ok(value);
                     }
                     params["account"] = json!(self.account);
@@ -798,6 +804,9 @@ impl<T: Transport> Engine<T> {
                     if cached_kind {
                         self.store.decorate_chats(&mut value)?;
                         self.store.save_catalog(&method, &value)?;
+                        if method == "list_chats" {
+                            self.enable_previews(&value, generation, true)?;
+                        }
                         if method == "list_stickers"
                             && !value["partial"].as_bool().unwrap_or(false)
                             && value["products"].is_array()
@@ -875,6 +884,9 @@ impl<T: Transport> Engine<T> {
                     }
                     if method == "clear_cache" {
                         let kind = params["kind"].as_str().unwrap_or("all");
+                        if matches!(kind, "all" | "messages" | "chats") {
+                            self.previews = previews::Previews::default();
+                        }
                         if matches!(kind, "all" | "messages") {
                             self.scheduler.clear_work();
                             self.background.clear();
@@ -954,6 +966,7 @@ impl<T: Transport> Engine<T> {
                 self.queued_media.clear();
                 self.queued_gaps.clear();
                 self.scheduler.reset();
+                self.previews = previews::Previews::default();
                 self.account = account;
                 self.session_generation = generation;
                 self.transport.session(&self.account, generation);
@@ -1054,6 +1067,7 @@ impl<T: Transport> Engine<T> {
                 self.decorate_receipts(&chat, std::slice::from_mut(&mut message))?;
                 self.store.invalidate(&chat)?;
                 self.store.invalidate_catalogs()?;
+                self.store.save_chat_preview(&chat, &message)?;
                 let mut visible = message.clone();
                 if self.transport.memory_media(&self.account, &chat)
                     && matches!(visible["contentType"].as_str(), Some("IMAGE" | "VIDEO"))
@@ -1084,6 +1098,7 @@ impl<T: Transport> Engine<T> {
                 let result = (|| {
                     self.valid(generation)?;
                     self.scheduler.clear_work();
+                    self.previews = previews::Previews::default();
                     self.background.clear();
                     self.expression_scheduled = false;
                     self.queued_media.clear();
@@ -1175,6 +1190,9 @@ impl<T: Transport> Engine<T> {
     pub fn run(mut self, rx: mpsc::Receiver<Command>) {
         loop {
             self.finish_async();
+            if let Err(error) = self.finish_previews() {
+                eprintln!("[core previews] {error}");
+            }
             if self.receipts_flush_at.elapsed() >= Duration::from_secs(10) {
                 if let Err(error) = self.flush_receipts() {
                     eprintln!("[core receipts] {error}");
@@ -1198,6 +1216,9 @@ impl<T: Transport> Engine<T> {
                     }
                     if self.scheduler.enabled && self.start_async() {
                         continue;
+                    }
+                    if let Err(error) = self.start_preview() {
+                        eprintln!("[core previews] {error}");
                     }
                     let work = if self.scheduler.enabled {
                         self.next_background()
