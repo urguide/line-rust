@@ -150,9 +150,11 @@ pub(super) fn local_media_path(msg: &MessageInfo, for_viewer: bool) -> Option<St
             .cloned();
     }
     if ct == "VIDEO" {
-        if let Some(p) = msg.file_path.as_ref().filter(|p| {
-            std::path::Path::new(p).exists() && p.to_ascii_lowercase().ends_with(".mp4")
-        }) {
+        if let Some(p) = msg
+            .file_path
+            .as_ref()
+            .filter(|p| std::path::Path::new(p).is_file() && !is_thumb_media_path(p))
+        {
             return Some(p.clone());
         }
         // Viewer needs full video; thumb alone is not enough.
@@ -206,6 +208,10 @@ pub(super) fn request_media_download(state: &AppState, msg: &MessageInfo, action
         toast(state, &crate::i18n::t("select_chat_first"));
         return;
     };
+    if action == "open_cache_folder" && chat_memory_media(state, &chat_mid) {
+        toast(state, &crate::i18n::t("media_no_cache_folder"));
+        return;
+    }
     if msg.id.is_empty() {
         toast(state, &crate::i18n::t("media_download_failed"));
         return;
@@ -217,8 +223,12 @@ pub(super) fn request_media_download(state: &AppState, msg: &MessageInfo, action
         .get(&msg.id)
         .cloned()
         .unwrap_or_else(|| msg.clone());
-    let for_viewer = action == "open_viewer";
+    let for_viewer = matches!(
+        action,
+        "open_viewer" | "save_as_dialog" | "open_cache_folder"
+    );
     if let Some(path) = local_media_path(&msg, for_viewer)
+        && (action != "open_cache_folder" || cached_media_path(state, &path).is_some())
         && (!chat_memory_media(state, &chat_mid)
             || !matches!(msg.content_type.as_str(), "IMAGE" | "VIDEO")
             || crate::memory_media::is_ram_path(&path))
@@ -262,6 +272,8 @@ pub(super) fn finish_media_action(
     match action {
         "open_viewer" => open_media_viewer(state, path, content_type, suggest_name),
         "save_dialog" => save_media_as(state, path, suggest_name, content_type),
+        "save_as_dialog" => save_media_with_dialog(state, path, suggest_name, content_type, true),
+        "open_cache_folder" => open_media_cache_folder(state, path),
         "play_audio" => {
             if let Err(e) = play_audio_file(path, &state.config.borrow().audio_output) {
                 toast(
@@ -291,6 +303,16 @@ pub(super) fn copy_media_to_dest(state: &AppState, src: &str, dest: &std::path::
 }
 
 pub(super) fn save_media_as(state: &AppState, path: &str, suggest_name: &str, content_type: &str) {
+    save_media_with_dialog(state, path, suggest_name, content_type, false);
+}
+
+fn save_media_with_dialog(
+    state: &AppState,
+    path: &str,
+    suggest_name: &str,
+    content_type: &str,
+    force_dialog: bool,
+) {
     let cfg = state.config.borrow().clone();
     let dest_dir = cfg.download_dir_for(content_type);
     if let Err(e) = std::fs::create_dir_all(&dest_dir) {
@@ -301,7 +323,7 @@ pub(super) fn save_media_as(state: &AppState, path: &str, suggest_name: &str, co
         return;
     }
 
-    if !cfg.download_ask_every_time {
+    if !force_dialog && !cfg.download_ask_every_time {
         let dest = downloads::unique_download_dest(&dest_dir, suggest_name);
         copy_media_to_dest(state, path, &dest);
         return;
@@ -322,10 +344,13 @@ pub(super) fn save_media_as(state: &AppState, path: &str, suggest_name: &str, co
     dialog.set_initial_folder(Some(&gio::File::for_path(&dest_dir)));
     let s = state.clone();
     let src = path.to_string();
+    // Keep RAM-only originals alive if scrolling releases them while the picker is open.
+    let lease = crate::memory_media::lease(path);
     dialog.save(
         Some(&state.window),
         None::<&gio::Cancellable>,
         move |result| {
+            let _lease = lease;
             let Ok(file) = result else {
                 return;
             };
@@ -337,6 +362,48 @@ pub(super) fn save_media_as(state: &AppState, path: &str, suggest_name: &str, co
                 let _ = std::fs::create_dir_all(parent);
             }
             copy_media_to_dest(&s, &src, &dest);
+        },
+    );
+}
+
+fn cached_media_path(state: &AppState, path: &str) -> Option<std::path::PathBuf> {
+    if crate::memory_media::is_ram_path(path) {
+        return None;
+    }
+    let root = state.data_dir.join("cache/media").canonicalize().ok()?;
+    let file = std::path::Path::new(path).canonicalize().ok()?;
+    (file.is_file() && file.starts_with(root)).then_some(file)
+}
+
+fn open_media_cache_folder(state: &AppState, path: &str) {
+    let Some(path) = cached_media_path(state, path) else {
+        toast(state, &crate::i18n::t("media_no_cache_folder"));
+        return;
+    };
+    let launcher = gtk::FileLauncher::new(Some(&gio::File::for_path(&path)));
+    let s = state.clone();
+    launcher.open_containing_folder(
+        Some(&state.window),
+        None::<&gio::Cancellable>,
+        move |result| {
+            if result.is_ok() {
+                return;
+            }
+            // Some file managers support opening folders but not selecting a file.
+            let Some(parent) = path.parent() else { return };
+            let folder = gtk::FileLauncher::new(Some(&gio::File::for_path(parent)));
+            let state = s.clone();
+            folder.launch(Some(&s.window), None::<&gio::Cancellable>, move |result| {
+                if let Err(error) = result {
+                    toast(
+                        &state,
+                        &crate::i18n::tf(
+                            "media_open_folder_failed",
+                            &[("error", &error.to_string())],
+                        ),
+                    );
+                }
+            });
         },
     );
 }

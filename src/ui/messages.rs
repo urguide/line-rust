@@ -671,6 +671,35 @@ fn append_message_menu(state: &AppState, footer: &gtk::Box, bubble: &gtk::Box, m
     let popover = gtk::Popover::new();
     let actions = gtk::Box::new(gtk::Orientation::Vertical, 2);
     reactions::append_choices(state, &actions, &popover, msg);
+    if matches!(msg.content_type.as_str(), "IMAGE" | "VIDEO") {
+        for (key, action) in [
+            ("media_save_as_dialog", "save_as_dialog"),
+            ("media_open_cache_folder", "open_cache_folder"),
+        ] {
+            let button = gtk::Button::with_label(&crate::i18n::t(key));
+            button.add_css_class("flat");
+            if action == "open_cache_folder" && chat_memory_media(state, &chat_mid) {
+                button.set_sensitive(false);
+                button.set_tooltip_text(Some(&crate::i18n::t("media_no_cache_folder")));
+            }
+            let s = state.clone();
+            let message = msg.clone();
+            let chat = chat_mid.clone();
+            let popup = popover.downgrade();
+            button.connect_clicked(move |_| {
+                if let Some(popup) = popup.upgrade() {
+                    popup.popdown();
+                }
+                if s.current_chat.borrow().as_deref() != Some(chat.as_str())
+                    || s.unsent_msg_ids.borrow().contains(&message.id)
+                {
+                    return;
+                }
+                request_media_download(&s, &message, action);
+            });
+            actions.append(&button);
+        }
+    }
     for (key, text) in [
         ("copy_message_all", msg.text.clone()),
         ("copy_message_urls", https_urls_for_clipboard(&msg.text)),
