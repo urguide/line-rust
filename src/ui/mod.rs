@@ -1863,7 +1863,9 @@ fn toast(state: &AppState, msg: &str) {
         eprintln!("[soft] {msg}");
         return;
     }
-    state.toast_overlay.add_toast(libadwaita::Toast::new(msg));
+    let notice = libadwaita::Toast::new(msg);
+    notice.set_use_markup(false);
+    state.toast_overlay.add_toast(notice);
 }
 
 fn peer_display_name(state: &AppState, mid: &str) -> String {

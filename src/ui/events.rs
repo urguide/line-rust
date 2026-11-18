@@ -625,7 +625,6 @@ pub(super) fn handle_event(state: &AppState, ev: ProtocolEvent) {
                             .as_deref()
                             .unwrap_or("Login failed. Tap Retry to start over."),
                     );
-                    login::show_qr_stage(&state.login);
                     state.login.retry_btn.set_visible(true);
                 }
                 if matches!(pending, Some(Pending::ListChats)) {

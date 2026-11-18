@@ -9,6 +9,7 @@ import { packRaw } from "./raw_codec.ts";
 import * as calls from "./calls.ts";
 import { unsendFromOperation } from "./events.ts";
 import { readFromOperation } from "./receipts.ts";
+import { lineTransport } from "./transport.ts";
 
 type Json = Record<string, unknown>;
 const worker = globalThis as unknown as {
@@ -111,7 +112,7 @@ async function handle(request: Json) {
         const next = await loginWithQR({
           onReceiveQRUrl: (url) => event("qr", { url }),
           onPincodeRequest: (pin) => event("pin", { pin }),
-        }, { device, version, storage });
+        }, { device, version, storage, ...lineTransport });
         ok(id, await connected(next, device));
         break;
       }
@@ -120,7 +121,12 @@ async function handle(request: Json) {
         ok(
           id,
           await connected(
-            await loginWithAuthToken(token, { device, version, storage }),
+            await loginWithAuthToken(token, {
+              device,
+              version,
+              storage,
+              ...lineTransport,
+            }),
             device,
           ),
         );
@@ -177,7 +183,12 @@ if (token) {
   try {
     const saved = await auth.loadDevice();
     const profile = await connected(
-      await loginWithAuthToken(token, { device: saved, version, storage }),
+      await loginWithAuthToken(token, {
+        device: saved,
+        version,
+        storage,
+        ...lineTransport,
+      }),
       saved,
     );
     event("session", { ...profile });
