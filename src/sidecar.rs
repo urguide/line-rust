@@ -13,6 +13,16 @@ use std::time::{Duration, Instant};
 
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
 
+fn request_timeout(method: &str) -> Duration {
+    if method == "login_qr" {
+        // LINE allows two 150-second polls for each of QR and PIN confirmation.
+        // Include setup/finalization time instead of using the ordinary RPC budget.
+        Duration::from_secs(11 * 60)
+    } else {
+        REQUEST_TIMEOUT
+    }
+}
+
 pub struct Sidecar {
     child: Arc<Mutex<Option<Child>>>,
     stdin: Arc<Mutex<Option<ChildStdin>>>,
@@ -366,7 +376,9 @@ impl Sidecar {
             }
             return Err(error.into());
         }
-        let _ = self.timeout_tx.send((id, Instant::now()));
+        let _ = self
+            .timeout_tx
+            .send((id, Instant::now() + request_timeout(method)));
         Ok(id)
     }
 
@@ -1114,8 +1126,8 @@ fn spawn_timeout_worker(
                     deadlines.push(item);
                 }
                 let now = Instant::now();
-                deadlines.retain(|(id, started)| {
-                    if now.duration_since(*started) < REQUEST_TIMEOUT {
+                deadlines.retain(|(id, deadline)| {
+                    if now < *deadline {
                         return true;
                     }
                     let timed_out = pending_ids
@@ -1146,6 +1158,38 @@ impl Drop for Sidecar {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn qr_confirmation_outlives_rpc_timeout_but_still_has_a_deadline() {
+        let (tx, rx) = std::sync::mpsc::channel();
+        let (events, received) = async_channel::unbounded();
+        let pending = Arc::new(Mutex::new(HashSet::from([1, 2])));
+        spawn_timeout_worker(rx, pending.clone(), events);
+        // Simulate 31 seconds spent waiting without making the test sleep.
+        let started = Instant::now() - Duration::from_secs(31);
+        tx.send((1, started + request_timeout("login_qr"))).unwrap();
+        tx.send((2, started + request_timeout("ping"))).unwrap();
+        assert!(matches!(
+            received.recv_blocking().unwrap(),
+            ProtocolEvent::Response {
+                id: 2,
+                ok: false,
+                ..
+            }
+        ));
+        assert!(pending.lock().unwrap().contains(&1));
+        // Expire QR explicitly to verify that hung login requests still terminate.
+        tx.send((1, Instant::now())).unwrap();
+        assert!(matches!(
+            received.recv_blocking().unwrap(),
+            ProtocolEvent::Response {
+                id: 1,
+                ok: false,
+                ..
+            }
+        ));
+        assert!(pending.lock().unwrap().is_empty());
+    }
 
     #[test]
     fn live_message_event_preserves_chat_instead_of_using_sender() {

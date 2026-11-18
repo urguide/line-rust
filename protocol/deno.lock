@@ -1,15 +1,15 @@
 {
   "version": "5",
   "specifiers": {
-    "jsr:@evex/linejs-types@^3.5.0": "3.5.0",
-    "jsr:@evex/linejs@^3.5.0": "3.5.0",
-    "jsr:@evex/loose-types@^1.0.1": "1.0.1",
+    "jsr:@evex/linejs-types@^3.6.5": "3.6.5",
+    "jsr:@evex/linejs@^3.6.5": "3.6.5",
     "jsr:@std/assert@1": "1.0.19",
     "jsr:@std/internal@^1.0.12": "1.0.14",
     "jsr:@std/internal@^1.0.14": "1.0.14",
     "jsr:@std/path@1": "1.1.6",
+    "npm:@evex-dev/linejs-types@^3.6.5": "3.6.5",
     "npm:@noble/ciphers@^2.2.0": "2.4.0",
-    "npm:@types/node-int64@~0.4.32": "0.4.32",
+    "npm:@types/crypto-js@^4.2.2": "4.2.2",
     "npm:@types/thrift@~0.10.17": "0.10.17",
     "npm:crypto-js@^4.2.0": "4.2.0",
     "npm:curve25519-js@^0.0.4": "0.0.4",
@@ -19,16 +19,15 @@
     "npm:opusscript@~0.1.1": "0.1.1",
     "npm:thrift@0.20": "0.20.0",
     "npm:tweetnacl@^1.0.3": "1.0.3",
-    "npm:undici@7": "7.30.1"
+    "npm:undici@^7.16.0": "7.30.1"
   },
   "jsr": {
-    "@evex/linejs@3.5.0": {
-      "integrity": "c8fc8adba7163f916fb7b75e8197429abd3d29f283e4ac47233877b0b7f5c102",
+    "@evex/linejs@3.6.5": {
+      "integrity": "07f4c829f48daafb989db7fd5d4cab4fbdbd3a6c12e7d8e62d0249ccb3def2a1",
       "dependencies": [
-        "jsr:@evex/linejs-types",
-        "jsr:@evex/loose-types",
+        "npm:@evex-dev/linejs-types",
         "npm:@noble/ciphers",
-        "npm:@types/node-int64",
+        "npm:@types/crypto-js",
         "npm:@types/thrift",
         "npm:crypto-js",
         "npm:curve25519-js",
@@ -40,14 +39,8 @@
         "npm:undici"
       ]
     },
-    "@evex/linejs-types@3.5.0": {
-      "integrity": "25759fe36a44902911a4b2c50a44f32b32f86e167def15e9e59c5a63f7be1eaf",
-      "dependencies": [
-        "jsr:@evex/loose-types"
-      ]
-    },
-    "@evex/loose-types@1.0.1": {
-      "integrity": "6f233f1af29a3f2c6c3ba8de3ce3b74d4dc660dc202ed8160a5522170333bd1d"
+    "@evex/linejs-types@3.6.5": {
+      "integrity": "93973daab7c2c4f9fa13ad124236ecc1b83267451beaa5b9471dca8c5927f543"
     },
     "@std/assert@1.0.19": {
       "integrity": "eaada96ee120cb980bc47e040f82814d786fe8162ecc53c91d8df60b8755991e",
@@ -66,8 +59,17 @@
     }
   },
   "npm": {
+    "@evex-dev/linejs-types@3.6.5": {
+      "integrity": "sha512-+eo+5YO9j7SN8v4yJLah67KRXUwkfGHAIf7dQ1ZTCEDP2dWri7c0YEYRkJ6UYfXWKvDWe+OZK2BWmX/2hIDbvw==",
+      "optionalDependencies": [
+        "@types/node"
+      ]
+    },
     "@noble/ciphers@2.4.0": {
       "integrity": "sha512-AnjFn0Jv92laAkvMrghlFZq4qQCIN/4DxFV/eooqtC2YTjB7kBeLMS2T9KJX4Dn+ZVXLOwK0lSgqDtx9gvxtiw=="
+    },
+    "@types/crypto-js@4.2.2": {
+      "integrity": "sha512-sDOLlVbHhXpAUAL0YHDUUwDZf3iN4Bwi4W6a0W0b+QcAezUbRtH4FVb+9J4h+XFPW7l/gQ9F8qC7P+Ec4k8QVQ=="
     },
     "@types/node-int64@0.4.32": {
       "integrity": "sha512-xf/JsSlnXQ+mzvc0IpXemcrO4BrCfpgNpMco+GLcXkFk01k/gW9lGJu+Vof0ZSvHK6DsHJDPSbjFPs36QkWXqw==",
@@ -75,8 +77,8 @@
         "@types/node"
       ]
     },
-    "@types/node@26.6.6": {
-      "integrity": "sha512-MzQj+8Kx3XI40OmUAE6Qoh58ZMNstNNMwn2nfd3qWsfe7nDNSqJNzes4njhz6AHwrSHOffSLwXU6yb474Q4aog==",
+    "@types/node@24.19.2": {
+      "integrity": "sha512-93d49wCWJkCyN87MxLpNN6KXPCwFw7bVUg79mGUV1OS40JGWwVCr8n61DXCSqz7CV6/VfPkb7xec7uP2M+QHWQ==",
       "dependencies": [
         "undici-types"
       ]
@@ -105,7 +107,7 @@
     "curve25519-js@0.0.4": {
       "integrity": "sha512-axn2UMEnkhyDUPWOwVKBMVIzSQy2ejH2xRGy1wq81dqRwApXfIzfbE3hIX0ZRFBIihf/KDqK158DLwESu4AK1w=="
     },
-    "isomorphic-ws@4.0.1_ws@5.2.7": {
+    "isomorphic-ws@4.0.1_ws@5.2.8": {
       "integrity": "sha512-BhBvN2MBpWTaSHdWRb/bwdZJ1WaehQ2L1KngkCkfLUGF0mAWAT1sQUQacEmQ0jXkFw/czDXPNQSL5u2/Krsz1w==",
       "dependencies": [
         "ws"
@@ -137,14 +139,14 @@
     "tweetnacl@1.0.3": {
       "integrity": "sha512-6rt+RN7aOi1nGMyC4Xa5DdYiukl2UWCbcJft7YhxReBGQD7OAM8Pbxw6YMo4r2diNEA8FEmu32YOn9rhaiE5yw=="
     },
-    "undici-types@8.9.0": {
-      "integrity": "sha512-KTDyRTYX8sWmKXAikPHHSyc63CRPETMctyjKFupcC6OBLXT3xsN0e9aF7m+mIXutFWpUXuedtowG7iLOzp0kQg=="
+    "undici-types@7.24.6": {
+      "integrity": "sha512-WRNW+sJgj5OBN4/0JpHFqtqzhpbnV0GuB+OozA9gCL7a993SmU+1JBZCzLNxYsbMfIeDL+lTsphD5jN5N+n0zg=="
     },
     "undici@7.30.1": {
       "integrity": "sha512-03KrMbjIFDWQR5RNPrSw3bd1r12JpyFQl9/yxjUbJtqkjmllqC5lFjZh6ujeuJCKr8EOQvRW872Oy/az+nLYxg=="
     },
-    "ws@5.2.7": {
-      "integrity": "sha512-Yp1RXz/2h2qC/Gy7d5mqQcpuCWbXiO6FgYw/jTbSvytZF9wD7fh7od+6WzWR/y9EAnXcJjQZpPkYVmj3T2bj+Q==",
+    "ws@5.2.8": {
+      "integrity": "sha512-1uiA1nkfmkDNNEvLlBWhjbjVykN+sgSdYGzxkx/3FZAuoh9HP3SoCLD+nndVScRuaSOsNhtoZTnthunngKkhRQ==",
       "dependencies": [
         "async-limiter"
       ]
@@ -152,8 +154,8 @@
   },
   "workspace": {
     "dependencies": [
-      "jsr:@evex/linejs-types@^3.5.0",
-      "jsr:@evex/linejs@^3.5.0",
+      "jsr:@evex/linejs-types@^3.6.5",
+      "jsr:@evex/linejs@^3.6.5",
       "jsr:@std/assert@1",
       "jsr:@std/path@1",
       "npm:opusscript@0.1.1"

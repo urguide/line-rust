@@ -176,7 +176,7 @@ export function createApi(
       case "bridge_owned_stickers":
       case "bridge_owned_expressions": {
         const { ShopService } = await import(
-          "https://jsr.io/@evex/linejs/3.5.0/base/service/shop/mod.ts"
+          "https://jsr.io/@evex/linejs/3.6.5/base/service/shop/mod.ts"
         );
         const shop = new ShopService(c.base);
         return await shop.getOwnedProductSummaries(
